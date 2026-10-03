@@ -1,0 +1,12 @@
+import { launch } from '../pw.mjs';
+const { browser, page, logs } = await launch(390, 844, true);
+await page.goto('file://'+process.cwd()+'/index.html'); await page.addScriptTag({ path: 'tests/drv.js' });
+await page.check('#ack'); await page.click('#startBtn'); await page.waitForTimeout(600);
+await page.evaluate(() => { __drv.goPhase1(); __drv.goDesc(); __drv.setRotation(); __drv.goArch(); __drv.goCross(); __drv.alignAt(); __sim.setAngles(-30, -30); __drv.press(); __drv.deployTo(0.5); __drv.toLock(); __sim.setAngles(32, 30); __drv.up(40); __drv.secondView(); });
+await page.waitForTimeout(2500);
+await page.evaluate(() => window.scrollTo(0, 0));
+const r = await page.evaluate(() => { const q = s => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); return [Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)]; }; return { top: q('#top'), inject: q('#bInject'), actions: [...document.querySelectorAll('#actions button')].map(b => [b.textContent, ...(() => { const c = b.getBoundingClientRect(); return [Math.round(c.y), Math.round(c.height)]; })()]), unlock: q('#hUnlock'), dep: q('#hDep'), mon: q('#monPanel'), wheel: q('#wheel'), scrollH: document.documentElement.scrollHeight }; });
+console.log(JSON.stringify(r));
+await page.screenshot({ path: 'shots/final/phone-p6-unlock-ui.png' });
+await page.evaluate(() => window.scrollTo(0, 400)); await page.waitForTimeout(300); await page.screenshot({ path: 'shots/final/phone-p6-handle-scrolled.png' });
+console.log(logs); await browser.close();

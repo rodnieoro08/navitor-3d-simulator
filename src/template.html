@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TAVI cath-lab trainer - unofficial Navitor Vision / FlexNav teaching model</title>
+<style>/*CSS*/</style>
+</head>
+<body>
+<div id="title" class="screen">
+  <div class="card">
+    <div class="tag">UNOFFICIAL TRAINING MODEL</div>
+    <h1>TAVI Cath-Lab Simulator</h1>
+    <p class="sub">One patient: severe aortic stenosis, 24 mm annulus, 27 mm self-expanding valve on a FlexNav-style delivery system.</p>
+    <ul class="legal">
+      <li><b>Unofficial training model only.</b> This is not an Abbott product and carries no Abbott logos or certification.</li>
+      <li><b>Not the Navitor IFU.</b> Always follow the current Instructions For Use and your proctor / local protocol.</li>
+      <li><b>Not medical advice.</b> Numbers, angles and failure behaviour are a simplified teaching model of one fictional patient.</li>
+      <li>Nothing here is graphic: a failed step shows as a fluoro problem plus a coaching line, then you retry.</li>
+    </ul>
+    <label class="ack"><input type="checkbox" id="ack"> <span>I understand this is an unofficial teaching simulator and not clinical guidance.</span></label>
+    <button id="startBtn" class="primary big" disabled>Start the case</button>
+    <p class="mini">Desktop: arrow keys move the C-arm, hold buttons or keys (W/S, Q/E, F/G, X/Z) for the system. Phone: same actions with on-screen buttons.</p>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <div id="top">
+    <header id="hdr">
+      <div class="brand"><b>TAVI trainer</b><small>unofficial model</small></div>
+      <nav id="stepper" aria-label="Phases"></nav>
+      <div class="hdrctl">
+        <div class="seg" id="segMode"><button data-mode="fluoro" class="on">Fluoro</button><button data-mode="anat">Anatomy</button></div>
+        <div class="seg" id="segLock"><button data-lock="1" class="on">Locked C-arm</button><button data-lock="0">Free orbit</button></div>
+        <button id="btnOverlay" class="sm" title="Hide / show all overlays">Overlays: on</button>
+        <button id="btnSettings" class="sm" title="Case card and settings">Settings</button>
+        <button id="btnReset" class="sm warn" title="Restart the case">Reset</button>
+      </div>
+    </header>
+    <div id="coachbar">
+      <div id="coach"><span id="phaseName"></span><span id="coachText"></span></div>
+      <div id="note"></div>
+      <div id="actions"></div><button id="bInject" class="contrast" title="Brief contrast puff from the pigtail in the NCC (phases 4-9). Shortcut: C">Inject contrast (pigtail)</button>
+    </div>
+    <div id="viewtabs"><button data-vt="mon" class="on">Fluoro / monitor</button><button data-vt="td">3D view</button></div>
+  </div>
+  <main id="grid">
+    <section id="monPanel" class="panel"><canvas id="mon"></canvas><canvas id="ov"></canvas>
+      <div class="zoombar"><button id="zOut" aria-label="Zoom out">-</button><button id="zIn" aria-label="Zoom in">+</button></div>
+      <div id="fxbanner" hidden></div></section>
+    <section id="tdPanel" class="panel"><canvas id="td"></canvas>
+      <div id="legend"></div><div id="partinfo"></div>
+      <button id="btnCut" class="sm cut">Cutaway: off</button></section>
+    <section id="ctrl"><div id="ctabs"></div><div id="ccards"></div></section>
+      <section id="handlePanel" class="panel"><div id="handleBox"></div></section>
+</main>
+  <footer id="foot">Unofficial training model &middot; Not an Abbott product &middot; Not the Navitor IFU &middot; Not medical advice</footer>
+</div>
+
+<div id="scoreModal" class="modal" hidden><div class="sheet" id="sheet"></div></div>
+<div id="settingsModal" class="modal" hidden><div class="sheet" id="settingsSheet"></div></div>
+<script>/*JS*/</script>
+</body>
+</html>

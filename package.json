@@ -1,0 +1,15 @@
+{
+  "name": "navitor-3d-simulator",
+  "version": "1.0.0",
+  "description": "Unofficial 3D cath-lab teaching simulator for new TAVI implanters (Navitor Vision / FlexNav case). Not an Abbott product.",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node tests/logic.mjs && node tests/physics.mjs"
+  },
+  "dependencies": {
+    "esbuild": "^0.28.2",
+    "playwright-core": "^1.63.0",
+    "three": "^0.186.1"
+  },
+  "type": "module"
+}

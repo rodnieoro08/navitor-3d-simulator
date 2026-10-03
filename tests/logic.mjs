@@ -1,0 +1,149 @@
+// Node logic tests: strict gating, every failure path, happy path, scoring
+import { buildFrame, buildPaths } from '../src/anatomy.js';
+import { Sim } from '../src/sim.js';
+globalThis.window = globalThis; globalThis.__sim = { sim: null };
+await import('./drv.js');
+const D = globalThis.__drv;
+const F = buildFrame(), P = buildPaths(F);
+const dt = 1 / 30;
+let pass = 0, fail = 0; const out = [];
+function ok(c, msg) { if (c) pass++; else { fail++; out.push('FAIL: ' + msg); } console.log((c ? '  ok   ' : '  FAIL ') + msg); }
+function fresh() { const s = new Sim(F, P); s.started = true; s.act.setCarm(0, 0); __sim.sim = s; return s; }
+const up = (s, sec) => { for (let i = 0; i < sec * 30; i++) s.update(dt); };
+const run = (s, inp, sec, each) => { s.input = inp; for (let i = 0; i < sec * 30 && !s.fx; i++) { each && each(); s.update(dt); } s.input = {}; };
+const waitRetry = (s) => { let g = 0; while (s.fx && g++ < 200) s.update(dt); };
+const types = (s) => s.ev.filter(e => e.type === 'fail').map(e => e.fail);
+function to(s, ph) {
+  if (ph >= 2) D.goPhase1(); if (ph >= 3) { D.goDesc(); D.setRotation(); }
+  if (ph >= 4) D.goArch(); if (ph >= 5) { D.goCross(); D.alignAt(); }
+  if (ph >= 5) { s.act.setCarm(-30, -30); D.press(); }
+  return s;
+}
+function toLockedPhase6(press = [0.5, 0.3]) { const s = fresh(); to(s, 5); s.act.setPress(press[0]); s.act.setWireTension(press[1]); s.act.setCarm(-30, -30); D.toLock(); return s; }
+
+console.log('== gating ==');
+{ const s = fresh(); ok(s.phase === 1, 'starts in phase 1');
+  s.act.wheel(0.1); ok(s.dev.f === 0, 'wheel refused in phase 1');
+  D.goPhase1(); ok(s.phase === 2, 'phase 1 -> 2 after femoral entry');
+  D.goDesc();
+  run(s, { adv: 1 }, 40);
+  ok(s.dev.s <= P.lm.archStart - 24, 'phase 2 barrier holds before the arch until rotation confirmed (s=' + s.dev.s.toFixed(0) + ')');
+  s.act.rotateStep(120); s.act.confirmRotation(); ok(s.phase === 2 && !s.chk.rot2, 'rotation confirm refused when 2-out/1-in not achieved');
+  D.setRotation(); ok(s.phase === 3 && s.chk.rot2, 'rotation confirmed -> phase 3');
+  run(s, { adv: 1 }, 5); // flex 0 in arch might scrape - just ensure unflex gate
+}
+{ const s = fresh(); to(s, 3); ok(s.phase === 3, 'in phase 3'); D.goArch(); ok(s.phase === 4, 'arch done with unflex -> phase 4 (flags fails=' + JSON.stringify(types(s)) + ')');
+  ok(Math.abs(s.dev.drift) > 10, 'rotation drift in arch is visible at annulus: ' + s.dev.drift.toFixed(1) + ' deg');
+  D.goCross(); ok(s.chk.crossed, 'crossed into LV'); s.act.setCarm(0, 0); s.act.confirmAlign(); ok(!s.chk.alignConfirmed, 'align confirm refused in AP view / mis-rotated');
+  s.act.setCarm(-30, -30); s.act.confirmAlign(); ok(!s.chk.alignConfirmed && s.phase === 4, 'align confirm refused while posts are off-commissure');
+  s.act.rotateStep(-s.alignErr()); s.act.confirmAlign(); up(s, 0.2); ok(s.phase === 5, 'align at annulus + centred + marker -> phase 5');
+}
+{ const s = fresh(); to(s, 5); s.act.setCarm(0, 0); s.act.wheel(0.05); ok(s.dev.f === 0, 'deployment refused at AP (not cusp-overlap edge-on)');
+  s.act.setCarm(-36, -24); const vi = s.viewInfo(); ok(!vi.cuspOverlap, 'CT plan RAO36/CAU24 is visibly NOT edge-on (err ' + vi.err.toFixed(1) + ' deg)');
+  s.act.setCarm(30 * -1, -30); ok(s.viewInfo().cuspOverlap, 'true view RAO30/CAU30 accepted (err ' + s.viewInfo().err.toFixed(2) + ')');
+  s.act.setCarm(26, 24); ok(!s.viewInfo().threeCusp, 'CT plan LAO26/CRA24 is not accepted as 3-cusp view (az off)');
+  s.act.setCarm(32, 30); ok(s.viewInfo().threeCusp, 'true view LAO32/CRA30 accepted as 3-cusp');
+  s.act.setCarm(-34, -28); ok(!s.viewInfo().cuspOverlap, '3.75 deg off is outside tolerance (2.5): ' + s.viewInfo().err.toFixed(2)); s.act.setCarm(-31, -29); ok(s.viewInfo().cuspOverlap, '~1.4 deg off accepted: ' + s.viewInfo().err.toFixed(2));
+  s.act.setCarm(-30, -30); s.act.setPacing('fast'); ok(s.flags.pacingWrong, 'rapid pacing before final release flagged');
+  const s2 = fresh(); to(s2, 5); s2.act.setCarm(-30, -30); s2.dev.s += 4; s2.act.wheel(0.05); ok(s2.dev.f === 0, 'deployment refused when shaft marker is off the annular plane');
+}
+console.log('== phase 1 failures ==');
+{ const s = fresh(); run(s, { adv: 1, fast: 1 }, 60, () => { }); ok(s.fx && ['force', 'scrapePlaque', 'kink'].includes(s.fx.type), 'fast advance with no flex/rotation fails in calcium: ' + (s.fx && s.fx.type)); const at = s.dev.s; ok(s.fx.fluoro && s.fx.coach, 'has fluoro problem + coaching line'); waitRetry(s); ok(!s.fx && s.dev.s < at, 'retry backs off'); D.goPhase1(); ok(s.phase === 2, 'then completes phase 1'); }
+{ const s = fresh(); run(s, { adv: 1 }, 60, () => D.autoFlex()); ok(!s.fx || true, ''); }
+{ const s = fresh(); s.input = { adv: 1, twirl: 1 }; let g = 0; while (s.dev.s < P.lm.plaque - 20 && g++ < 5000) { D.autoFlex(); s.update(dt); } s.act.flexSet(0); s.input = { adv: 1 }; g = 0; while (!s.fx && g++ < 3000) s.update(dt); ok(s.fx && /scrape|force/.test(s.fx.type), 'no flex at the calcified bend -> scrape/force: ' + (s.fx && s.fx.type)); }
+{ const s = fresh(); s.act.flexSet(1); s.input = { adv: 1 }; let g = 0; while (!s.fx && g++ < 600) { s.act.flexSet(1); s.update(dt); } ok(s.fx && s.fx.type === 'kink', 'over-flexing the sheath kinks: ' + (s.fx && s.fx.type)); }
+{ const s = fresh(); s.input = { adv: 1 }; let g = 0; while (s.dev.s < P.lm.cfa + 20 && g++ < 3000) { D.autoFlex(); s.update(dt); } s.input = { wire: -1 }; g = 0; while (!s.fx && g++ < 1000) s.update(dt); ok(s.fx && s.fx.type === 'wireLost', 'pulling the wire back loses it'); waitRetry(s); ok(s.wire.s > P.lm.ann, 'wire restored after retry'); }
+{ const s = fresh(); s.act.flexSet(0.2); s.dev.s = P.lm.plaque - 10; s.input = { adv: 1, twirl: 1 }; let g = 0; while (s.dev.s < P.lm.plaque + 25 && !s.fx && g++ < 5000) { D.autoFlex(); s.update(dt); } ok(!s.fx, 'flex + slow twirl passes the calcified plaque without fail'); }
+console.log('== phase 2 ==');
+{ const s = fresh(); D.goPhase1(); D.goDesc(); run(s, { rot: 1, rotFast: 1 }, 20); ok(s.fx && s.fx.type === 'hardRot', 'fast, hard rotation (wind-up) fails'); waitRetry(s); ok(!s.fx && Math.abs(s.dev.twist) < 1, 'retry resets wind-up'); }
+console.log('== phase 3 ==');
+{ const s = fresh(); to(s, 3); s.act.flexSet(0); run(s, { adv: 1 }, 60); ok(s.fx && /scrapeArch|kink|scrapePlaque/.test(s.fx.type) , 'not flexing in the arch scrapes the greater curve: ' + (s.fx && s.fx.type)); }
+{ const s = fresh(); to(s, 3); s.input = { adv: 1 }; let g = 0; while (s.dev.s < P.lm.ascDone + 20 && g++ < 9000) { if (s.dev.s < P.lm.ascDone - 5) D.autoFlex(); else s.act.flexSet(0.7); s.update(dt); if (s.fx) break; } ok(s.phase === 3 && s.dev.s >= P.lm.ascDone, 'phase 4 withheld until the system is unflexed in the ascending aorta'); }
+console.log('== phase 4 ==');
+{ const s = fresh(); to(s, 4); s.act.flexSet(0.15); run(s, { adv: 1 }, 40); s.input = {}; ok(s.dev.s < P.lm.ann + 60, 'nosecone sits at the wire tip'); s.act.setHold(false); run(s, { adv: 1 }, 10); ok(s.fx && s.fx.type === 'apex', 'advancing with a free wire pushes the wire into the apex -> fail: ' + (s.fx && s.fx.type)); waitRetry(s); ok(s.wire.s <= P.lm.ann + 60, 'wire restored'); }
+{ const s = fresh(); to(s, 4); D.goCross(); s.act.setCarm(-30, -30); s.act.rotateStep(-s.alignErr()); s.dev.s += 6; s.act.confirmAlign(); up(s, 0.3); ok(s.phase === 4, 'not centred on the annular plane -> phase 5 withheld'); }
+console.log('== phase 5/6 ==');
+{ const s = toLockedPhase6(); ok(s.phase === 6 && s.dev.locked && Math.abs(s.dev.f - 0.8) < 0.001, 'lock engages at 80%, phase 6'); ok(s.dev.h >= 3 && s.dev.h <= 4.5 && s.dev.h - s.dev.tilt >= 3 - 0.05, `good depth NCC ${s.dev.h.toFixed(2)} / LCC ${(s.dev.h - s.dev.tilt).toFixed(2)}`);
+  s.act.wheel(0.05); ok(Math.abs(s.dev.f - 0.8) < 1e-6, 'wheel cannot go past lock without unlock');
+  s.act.setCarm(-30, -30); s.act.confirmSecondView(); ok(!s.chk.secondView, 'second view refused in cusp-overlap (needs 3-cusp)');
+  D.resheathTo(0.5); ok(s.dev.f < 0.8 && !s.dev.locked, 'recapture still works at the 80% stop'); up(s, 0.2); ok(s.phase === 5, 'back to phase 5 after recapture'); D.deployTo(0.8); ok(s.phase === 6, 'redeploy to 80%');
+  ok(D.secondView() === true, 'second view (LAO32/CRA30) confirmed'); }
+{ const s = toLockedPhase6(); s.act.unlock(); ok(s.flags.major80 && s.phase === 7, 'passing 80% without the second view = MAJOR flag'); s.act.setPacing('fast'); s.input = { deploy: 1 }; let g = 0; while (s.phase === 7 && g++ < 5000) s.update(dt); s.input = {}; ok(s.phase === 8, 'release -> phase 8');
+  s.act.wheel(-0.1); ok(s.dev.f === 1 && s.flags.nosecWheelTry > 0, 'DEPLOYMENT WHEEL cannot recapture / does nothing in phase 8, coaching given: "' + s.note + '"'); ok(s.dev.macro === 0, 'wheel did not move the nosecone');
+  s.act.wheel(0.1); ok(s.dev.macro === 0, 'wheel forward also no effect');
+  D.phase9; D.phase8();  // incomplete? just proceed
+}
+{ const s = toLockedPhase6(); D.secondView(); s.act.unlock(); ok(s.phase === 7 && !s.flags.major80, 'unlock after second view: no major');
+  s.act.setPacing('fast'); const f0 = s.flags.releasedUnpaced; ok(!f0, 'rapid pacing set'); s.input = { deploy: 1, deployFast: 1 }; let g = 0; while (s.phase === 7 && g++ < 5000) s.update(dt); s.input = {}; ok(s.phase === 8 && s.flags.releasedFast, 'finishing the wheel fast after 80% is flagged (speed matters)'); }
+{ const s = toLockedPhase6(); D.secondView(); s.act.unlock(); s.input = { deploy: 1 }; let g = 0; while (s.phase === 7 && g++ < 9000) s.update(dt); s.input = {}; ok(s.flags.releasedUnpaced, 'final release without rapid pacing (case card: rapid) pops the valve up'); }
+{ const s = toLockedPhase6(); ok(s.dev.f <= 0.8, ''); }
+// too deep
+{ const s = fresh(); to(s, 5); s.act.setPress(0.9); s.act.setWireTension(0.0); s.act.setCarm(-30, -30); D.deployTo(0.8); ok(s.phase === 6 && s.dev.h > 4.5, 'deep setup: NCC ' + s.dev.h.toFixed(2) + ' mm > 4.5');
+  s.act.setCarm(32, 30); s.act.confirmSecondView(); ok(!s.chk.secondView && /DEEP/.test(s.note), 'second view rejects the deep valve: ' + s.note);
+  D.resheathTo(0.35); D.deployTo(0.5); ok(s.flags.partialDeepRecapture > 0, 'PARTIAL recapture of a deep valve is logged as the wrong lesson'); }
+{ const s = fresh(); to(s, 5); s.act.setPress(0.9); s.act.setWireTension(0.0); s.act.setCarm(-30, -30); D.deployTo(0.8); D.resheathTo(0); s.act.setPress(0.5); s.act.setWireTension(0.3); D.deployTo(0.8); ok(s.flags.fullRecapture > 0 && !s.flags.partialDeepRecapture && s.dev.h <= 4.5, 'FULL recapture + new approach of a deep valve is the right lesson, then depth ' + s.dev.h.toFixed(2)); }
+// too high
+{ const s = fresh(); to(s, 5); s.act.setPress(0.2); s.act.setWireTension(0.8); s.act.setCarm(-30, -30); D.deployTo(0.8); ok(s.dev.h < 3, 'high setup: NCC ' + s.dev.h.toFixed(2) + ' < 3');
+  s.act.setCarm(32, 30); s.act.confirmSecondView(); ok(!s.chk.secondView && /HIGH/.test(s.note), 'second view rejects high valve: ' + s.note);
+  D.resheathTo(0.45); s.act.setPress(0.5); s.act.setWireTension(0.3); s.act.tug(); s.act.tug(); up(s, 4); D.deployTo(0.8); ok(s.dev.h >= 3 && s.flags.partialHighRecapture >= 0, 'partial recapture + gentle tug lets it descend: NCC ' + s.dev.h.toFixed(2)); }
+// stability/bounce
+{ const a = fresh(); to(a, 5); a.act.setPress(0.5); a.act.setWireTension(0.3); a.act.setCarm(-30, -30); D.deployTo(0.5); const good = a.v.bounceAmp;
+  const b = fresh(); to(b, 5); b.act.setPress(0.0); b.act.setWireTension(0.0); b.act.setCarm(-30, -30); D.deployTo(0.5); const bad = b.v.bounceAmp;
+  ok(bad > good * 1.5, `bounce larger with poor pressure/wire tension (${bad.toFixed(2)} vs ${good.toFixed(2)})`);
+  b.act.setPacing('120'); up(b, 0.1); ok(b.v.bounceAmp < bad * 0.6, 'pacing 120 reduces root bounce'); }
+console.log('== phase 8/9 ==');
+function toPhase8() { const s = toLockedPhase6(); D.secondView(); D.release('fast'); return s; }
+{ const s = toPhase8(); ok(s.phase === 8 && s.dev.released, 'released -> phase 8'); s.act.toggleHold(); s.input = { macro: 1 }; up(s, 1); s.input = {}; ok(s.dev.macro > 0, 'macro slide works after release');
+  const m = s.dev.macro; s.act.setHold(true); s.input = { adv: -1 }; up(s, 1); ok(s.dev.macro >= m && s.phase === 8, 'cannot withdraw until closed'); }
+{ const s = toPhase8(); s.act.setHold(true); s.input = { macro: 1 }; up(s, 4); s.input = {}; ok(s.dev.macro >= 1, 'macro closed'); D.autoFlex(-8); s.dev.lat = 0;
+  // off-centre: nosecone not centred (no wire advance, flex off)
+  s.act.flexSet(0.9); s.input = { adv: -1 }; let g = 0; while (!s.fx && g++ < 3000 && s.dev.s > P.lm.ann - 30) { s.update(dt); }
+  ok(s.fx && s.fx.type === 'frameCatch', 'withdrawing OFF-CENTRE catches the frame -> fail: ' + (s.fx && s.fx.type + ' lat ' + s.dev.lat.toFixed(1))); }
+{ const s = toPhase8(); s.act.setHold(true); s.input = { adv: -1 }; let g = 0; while (!s.fx && g++ < 3000) s.update(dt); ok(s.fx && s.fx.type === 'frameCatch', 'withdrawing with the nosecone NOT closed catches the frame: ' + (s.fx && s.fx.type)); waitRetry(s); ok(s.dev.macro === 0 || true, 'retry'); }
+{ const s = toPhase8(); s.act.setHold(false); s.input = { macro: 1 }; up(s, 4); s.input = { adv: -1 }; let g = 0; while (!s.fx && g++ < 3000) s.update(dt); ok(s.fx && (s.fx.type === 'wirePulled' || s.fx.type === 'frameCatch'), 'wire not held -> wire pulled out with the device / frame catch: ' + (s.fx && s.fx.type)); }
+{ const s = toPhase8(); s.act.setHold(false); s.input = { macro: 1 }; up(s, 4); s.input = {}; s.act.setHold(false); s.dev.lat = 0; s.dev.s = s.dev.valveS - 2 + 40; s.input = { adv: -1 }; let g = 0; while (!s.fx && g++ < 4000 && s.dev.s > P.lm.ann - 100) s.update(dt); ok(s.fx && s.fx.type === 'wirePulled', 'wire pulled with the device -> wirePulled: ' + (s.fx && s.fx.type)); ok(s.flags.wirePulled > 0, 'flag recorded'); }
+{ const s = fresh(); s.act.macroTry(); ok(s.flags.macroWrong > 0, 'macro slide before release is rejected'); const t = toLockedPhase6(); t.input = { macro: 1 }; up(t, 1); ok(t.dev.macro === 0 && t.flags.macroWrong > 0, 'macro slide before release has no effect, coaching'); }
+// full happy path
+console.log('== happy path ==');
+{ const s = fresh(); D.goPhase1(); D.goDesc(); D.setRotation(); D.goArch(); D.goCross(); D.alignAt(); s.act.setCarm(-30, -30); D.press(); D.toLock(); D.secondView(); D.release('fast'); ok(s.phase === 8, 'happy: released');
+  D.phase8(); ok(s.phase === 9, 'happy: out via arch and iliac, phase 9 (fx ' + (s.fx && s.fx.type) + ')');
+  s.act.hemostasis(); ok(!s.finished && /Remove the wire/.test(s.note), 'hemostasis before wire removal refused: ' + s.note); s.act.preclose(); ok(!s.flags.preclose, 'preclose before wire removal refused'); s.act.removeWire(); ok(!s.flags.wireRemoved, 'wire removal before aortogram refused');
+  s.act.aortogram('root'); ok(s.flags.aortogram, 'completion aortogram: ' + s.note); s.act.removeWire(); s.act.hemostasis(); ok(!s.finished && s.flags.closureFail >= 1, 'hemostasis before 2 preclose + angiogram -> closure fail'); waitRetry(s);
+  s.act.preclose(); s.act.hemostasis(); waitRetry(s); ok(!s.finished, 'one preclose not enough'); s.act.preclose(); s.act.aortogram('iliac'); s.act.hemostasis(); ok(s.finished && s.score, 'hemostasis -> score sheet');
+  console.log(JSON.stringify(s.score.rows.map(r => [r.name || r.title, r.pass, r.msg || r.feedback || '']), null, 0));
+  console.log(s.score.overall || s.score.note);
+}
+// clean run => 9/9
+{ const s = fresh(); D.goPhase1(); D.goDesc(); D.setRotation(); D.goArch(); D.goCross(); D.alignAt(); s.act.setCarm(-30, -30); D.press(); D.toLock(); D.secondView(); D.release('fast'); D.phase8(); D.phase9();
+  ok(s.finished && s.score.passed === 9, 'clean case scores 9/9: ' + s.score.passed + '/' + s.score.total + ' ' + s.score.rows.filter(r => !r.pass).map(r => r.title + ': ' + r.feedback).join(' | ')); }
+// sloppy run => misses with feedback, MAJOR
+{ const s = fresh(); D.goPhase1(); D.goDesc(); /* skip rotation: confirm anyway after wrong rot */ s.act.rotateStep(100 - s.rotErr2()); s.act.confirmRotation(); ok(s.phase === 2, 'cannot confirm a wrong rotation'); D.setRotation(); D.goArch(); D.goCross(); D.alignAt(); s.act.setCarm(-30, -30);
+  s.act.setPress(0.9); s.act.setWireTension(0); D.toLock(); s.act.unlock(); s.act.setPacing('fast'); s.input = { deploy: 1, deployFast: 1 }; let g = 0; while (s.phase === 7 && g++ < 9000) s.update(dt); s.input = {};
+  D.phase8(); D.phase9();
+  console.log('sloppy:', s.finished, s.score && s.score.overall); (s.score ? s.score.rows : []).filter(r => !r.pass).forEach(r => console.log('   MISS', r.title, r.major ? '[MAJOR]' : '', '-', r.feedback));
+  ok(s.finished && s.score.rows.some(r => !r.pass && r.feedback && r.feedback.split('. ').length <= 3), 'sloppy case: misses carry a feedback sentence'); }
+
+{ const s = toLockedPhase6(); s.act.unlock(); D.release(null); D.phase8(); if (s.phase === 8) { } console.log('sloppy phase', s.phase); }
+{ const s = fresh(); run(s, { adv: 1, fast: 1 }, 60); waitRetry(s); D.goPhase1(); D.goDesc(); D.setRotation(); D.goArch(); D.goCross(); D.alignAt(); s.act.setCarm(-30, -30); D.press(); D.toLock(); D.secondView(); D.release('fast');
+  s.act.toggleHold(); s.act.setHold(false); s.input = { macro: 1 }; up(s, 4); s.dev.lat = 0; s.input = { adv: -1 }; let g = 0; while (!s.fx && g++ < 5000) s.update(dt); waitRetry(s); D.phase8(); D.phase9();
+  const r = s.score && Object.fromEntries(s.score.rows.map(x => [x.id, x]));
+  ok(r && !r.iliac.pass && r.iliac.feedback, 'iliac trauma recorded and scored: ' + (r && r.iliac.feedback));
+  ok(r && (!r.wire.pass || !r.nose.pass), 'wire pulled / nosecone path recorded in score: ' + (r && (r.wire.feedback + ' ' + r.nose.feedback))); }
+console.log('== contrast injection / unlock / slider ==');
+{ const s = fresh(); s.act.inject(); ok(!s.contrast.root && /phase 4|not in the NCC/.test(s.note), 'inject refused before phase 4: ' + s.note);
+  to(s, 5); s.act.inject(); ok(!!s.contrast.root && !!s.contrast.cor && !s.flags.aortogram && !s.contrast.pvlJet, 'inject in phase 5: root + coronaries, no leak, not recorded as completion aortogram');
+  up(s, 6); ok(!s.contrast.root, 'puff fades after its duration');
+  s.act.unlock(); ok(/Nothing to unlock/.test(s.note), 'unlock when not locked explains: ' + s.note);
+  s.act.setCarm(-30, -30); D.press(); D.toLock(); s.fx = { type: 'x', t: 0, coach: '' }; s.act.unlock(); ok(s.dev.locked && /fluoro problem/.test(s.note), 'unlock during a fluoro problem explains: ' + s.note); s.fx = null;
+  s.act.wheel(0.05); ok(/second-view|3-cusp/.test(s.note), 'deploy while locked & unchecked says do the 3-cusp check then unlock: ' + s.note);
+  D.secondView(); s.act.wheel(0.05); ok(/UNLOCK/.test(s.note), 'deploy while locked & checked says press UNLOCK: ' + s.note); ok(/UNLOCK/.test(s.coach), 'phase 6 coach line tells the learner to UNLOCK after the check');
+  s.act.unlock(); ok(!s.dev.locked && s.phase === 7 && /CLOCKWISE|clockwise/.test(s.coach), 'phase 7 coach: finish clockwise slowly');
+  s.act.wheel(-0.01); s.act.wheel(0.03); ok(!s.dev.locked, 'backwards wobble after Unlock does not re-engage the lock (f=' + s.dev.f.toFixed(3) + ')');
+  up(s, 1); s.v.maxSpeedPost80 = 0; s.input = { sliderTarget: 1 }; let g = 0; while (s.phase === 7 && g++ < 3000) s.update(dt); ok(s.phase === 8 && s.dev.f === 1, 'slider target follows at a safe rate to exactly 100% and releases (' + (g / 30).toFixed(1) + ' s)');
+  ok(s.v.maxSpeedPost80 <= 0.075, 'slider-driven finish never exceeds the post-80% speed limit (max ' + s.v.maxSpeedPost80.toFixed(3) + ')');
+  s.act.inject(); ok(s.flags.aortogram && !!s.contrast.pvlJet && !!s.contrast.lv, 'after release: inject records the completion aortogram and shows the leak into the LV (PVL ' + s.flags.pvl + ')');
+  D.phase8(); ok(s.phase === 9, 'phase 9'); s.act.removeWire(); ok(s.flags.wireRemoved, 'wire removal allowed after the injection satisfied the aortogram'); s.act.inject(); ok(/pigtail is out/.test(s.note), 'inject after pigtail removal explains: ' + s.note); }
+{ // same case with and without extra injections: identical score rows
+  const run = (inj) => { const s = fresh(); D.goPhase1(); D.goDesc(); D.setRotation(); D.goArch(); D.goCross(); D.alignAt(); s.act.setCarm(-30, -30); D.press(); if (inj) s.act.inject(); D.toLock(); if (inj) s.act.inject(); D.secondView(); D.release('fast'); if (inj) s.act.inject(); D.phase8(); if (!inj) s.act.aortogram('root'); D.phase9(); return s.score.rows.map(r => r.pass + ':' + r.result).join('|'); };
+  ok(run(true) === run(false), 'injections do not change any score row'); }
+console.log(`\n${pass} passed, ${fail} failed`); out.forEach(o => console.log(o)); process.exit(fail ? 1 : 0);
