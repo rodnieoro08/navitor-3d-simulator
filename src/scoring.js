@@ -31,6 +31,24 @@ export function computeScore(sim) {
   row('iliac', 'Iliac trauma', !(fl.iliacEvents > 0), fl.iliacEvents ? `${fl.iliacEvents} iliac event(s)` : 'No force, no scrape, no kink', 'You forced, scraped or kinked in the iliac; flex to the bend, add a slow rotation and let the system find the lumen.');
   const clOk = fl.iliacAngioEnd && fl.preclose >= 2 && !(fl.closureFail > 0) && fl.hemostasis;
   row('closure', 'Access closure', clOk, clOk ? 'Angiogram, two preclose devices, hemostasis' : 'Closure sequence incomplete', fl.closureFail > 0 ? 'You went for hemostasis before both preclose devices and a clean angiogram; the sequence is angiogram, two devices, then hemostasis.' : 'Closure was not completed in order.');
+  // ---- phases skipped with the "Skip phase" button: every row that phase would have assessed is flagged, with one proctor sentence each
+  const SKIP = {
+    1: { name: 'Femoral entry', rows: ['iliac'], what: 'the femoral entry and iliac passage' },
+    2: { name: 'Descending aorta: set rotation', rows: ['rot'], what: 'the rotation set in the descending aorta' },
+    3: { name: 'Arch', rows: ['nose'], what: 'the arch path and the nosecone position' },
+    4: { name: 'Cross and centre', rows: ['align', 'nose'], what: 'crossing, centring and the commissure alignment re-check' },
+    5: { name: 'Cusp overlap: land the inflow', rows: ['depthNcc', 'depthLcc'], what: 'the landing and the slow unsheathing to the 80% lock' },
+    6: { name: 'Stop at 80%', rows: ['stop80', 'wire'], what: 'the 80% stop, the 3-cusp second view and the wire stability' },
+    7: { name: 'Release', rows: ['depthNcc', 'depthLcc', 'align'], what: 'the final release, depth and post alignment' },
+    8: { name: 'Nosecone out', rows: ['nose', 'wire'], what: 'closing the nosecone and withdrawing over the fixed wire' },
+    9: { name: 'Close', rows: ['closure'], what: 'the access closure' },
+  };
+  const skipped = Object.keys(fl.skipped || {}).map(Number).filter(n => fl.skipped[n]).sort((a, b) => a - b).map(n => ({ phase: n, name: SKIP[n].name, rows: SKIP[n].rows, text: `Phase ${n} (${SKIP[n].name}) was skipped, so ${SKIP[n].what} was not assessed.` }));
+  for (const sk of skipped) for (const id of sk.rows) {
+    const r = rows.find(q => q.id === id); if (!r) continue;
+    r.skipped = (r.skipped || []).concat(sk.phase); r.pass = false; r.result = 'Skipped by learner (phase ' + r.skipped.join(', ') + ')';
+  }
+  for (const r of rows) if (r.skipped) r.feedback = skipped.filter(q => r.skipped.includes(q.phase)).map(q => q.text).join(' ');
   const passed = rows.filter(r => r.pass).length;
   const majors = rows.filter(r => !r.pass && r.major).length;
   const bits = [];
@@ -40,6 +58,7 @@ export function computeScore(sim) {
   if (fl.releasedUnpaced) bits.push('Final release without the rapid pacing the case card asked for.');
   if (fl.releasedFast) bits.push('Wheel speed after 80% was too fast.');
   if (sim.v && sim.v.tugCount) bits.push(`${sim.v.tugCount} wire tug(s) used to let the valve descend.`);
+  if (skipped.length) bits.unshift(`Skipped by learner: phase${skipped.length > 1 ? 's' : ''} ${skipped.map(q => q.phase).join(', ')}.`);
   const overall = majors ? `MAJOR miss recorded. ${passed}/${rows.length} sections passed. ` + bits.join(' ') : `${passed}/${rows.length} sections passed. ` + (passed === rows.length ? 'Clean case - good depth, aligned posts, full close. ' : 'Work through the misses above and run it again. ') + bits.join(' ');
-  return { rows, passed, total: rows.length, majors, overall };
+  return { rows, passed, total: rows.length, majors, overall, skipped };
 }

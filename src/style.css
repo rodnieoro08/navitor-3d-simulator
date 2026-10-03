@@ -138,3 +138,10 @@ button.attn{animation:pulse 1.1s ease-in-out infinite;background:#c9792b;border-
  .mdep #mUnlock{font-size:13px}.mdstat{white-space:pre-line;display:flex;align-items:center;justify-content:center;border:1px dashed #32476b;border-radius:8px;font-size:13px;text-align:center}
  .mdep,.mdep *{-webkit-user-select:none;user-select:none}
 }
+
+/* --- v9: Skip phase button + skipped rows --- */
+#btnSkip{min-height:44px;font-weight:700;background:#3a2f12;border-color:#d9a43a;color:#ffe3a0;white-space:nowrap}
+#btnSkip:hover:not(:disabled){background:#4d3d17}
+.chip.next{cursor:pointer;border-color:#d9a43a}
+.sheet td.skip,.sheet .skipbox b{color:#ffd27a}.skipbox{border:1px dashed #d9a43a;border-radius:8px;padding:6px 10px;margin:8px 0;font-size:13px}.skipbox ul{margin:4px 0 0;padding-left:18px}
+@media (max-width:900px){#hdr .hdrctl #btnSkip{min-height:44px}.chip.next i{box-shadow:0 0 0 1px #d9a43a}}

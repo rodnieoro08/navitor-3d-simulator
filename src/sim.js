@@ -71,7 +71,7 @@ export class Sim {
     this.tiltBase = 0.45 + 0.3 * r3;
     this.v = { ph: PH.createState(), tiltStab: 1, tiltLat: 0, sysFrozen: 0, biasFrozen: 0, extra: 0, tug: 0, tugT: 0, relExtra: 0, speed: 0, lastF: 0, stab: 0, bounceAmp: 0, touched: false, minF: 1, deepFlag: false, tugCount: 0, speedAt80: 0, maxSpeedPost80: 0, alignFrozen: null };
     this.pf = { scrapeM: 0, forceM: 0, kinkM: 0, hardM: 0, resist: 0 }; // meters
-    this.p4Hint = false;
+    this.p4Hint = false; this.lastSkip = null;
     this.chk = { crossed: false, centered: false, marker: false, alignOk: false, alignConfirmed: false, rot2: false, secondView: false, secondViewDepth: null };
     this.ev = []; // event log for scoring
     this.flags = { major80: false, rotSetDesc: false, rotErrDesc: null, alignAtConfirm: null, alignFinal: null, pacingEarly: false, pacingWrong: false, pacingLeftOn: false, partialDeepRecapture: 0, fullRecapture: 0, partialHighRecapture: 0, tugs: 0, wheelWrong: 0, nosecWheelTry: 0, macroWrong: 0, wireNotHeld: 0, preAngio: false, iliacAngioEnd: false, aortogram: false, wireRemoved: false, preclose: 0, hemostasis: false, closureFail: 0, stabLow: false, unlockAt: null, finalDepthNcc: null, finalDepthLcc: null, finalAlign: null, pvl: null, coronary: null, pacingUsed: 'off', releasedFast: false, phase8Closed: false, prematureFast: false };
@@ -97,6 +97,7 @@ export class Sim {
     if (this.phase === 4 && this.p4Ready()) c = COACH[4] + ' Crossed, centred and on the plane: confirm the commissure alignment (recommended). You may also continue without it (press Skip alignment check, or just start the wheel): that is a scored miss on the alignment row.';
     if (this.phase === 5 && (this.flags.alignSkipped || this.flags.skipNoCross || this.flags.skipNoCentre || this.flags.skipNoMarker)) { const m = []; if (this.flags.alignSkipped) m.push('the alignment re-check at the annulus'); if (this.flags.skipNoCross) m.push('crossing the valve'); if (this.flags.skipNoCentre) m.push('centring the shaft'); if (this.flags.skipNoMarker) m.push('putting the marker on the annular plane'); c = COACH[5] + ' NOTE: you skipped ' + m.join(', ') + ' - scored as a miss.' + ((this.flags.skipNoCross || this.flags.skipNoCentre || this.flags.skipNoMarker) ? ' Unsheathing stays locked out until the valve is crossed, centred and the inner-shaft marker is on the annular plane (and the view is cusp overlap).' : ''); }
     if (this.phase === 7) c = 'Unlocked - past the point of no return. Finish slowly: turn the deployment wheel clockwise (or hold Deploy slow, or drag the slider) up to 100%. Rapid pacing for the final release only if the case card says so. Speed after 80% still matters.';
+    if (this.lastSkip && this.lastSkip.to === this.phase && !this.finished) c += ` (Phase ${this.lastSkip.from} was skipped by you and is marked on the score sheet.)`;
     this.coach = c;
   }
   say(t, secs = 5) { this.note = t; this.noteT = secs; this.emit('note', t); }
@@ -137,6 +138,8 @@ export class Sim {
     confirmRotation: () => this.confirmRotation(),
     confirmAlign: () => this.confirmAlign(),
     skipAlign: () => this.proceedToLanding(),
+    skipPhase: () => this.skipPhase(),
+    finishNow: () => this.finishNow(),
     confirmSecondView: () => this.confirmSecondView(),
     macroTry: () => this.macroTry(),
     aortogram: (where) => this.aortogram(where),
@@ -267,6 +270,81 @@ export class Sim {
     const list = miss.length ? miss.join('; ') : 'nothing was missed';
     this.say(`Skipped to the landing: ${list} - scored as a miss.` + (fix.length ? ` Before you unsheathe, ${fix.join(', and ')}; the wheel stays locked out until then.` : ' Continuing to the landing.'), 10);
     return true;
+  }
+  // ---------- Skip phase (learner button) ----------
+  // Advances to the next phase from ANY state (also during a fluoro problem). The simulation is put into a consistent, safe state for the next
+  // phase (position, flex, rotation, wire, C-arm, deployment), the skipped phase is recorded (flags.skipped) and the proctor sheet marks the rows
+  // that phase would have assessed. Deployment is moved by running the real physics at the safe slow wheel rate, so depth / seating stay physical.
+  carmFor(kind) { // C-arm angles that give the cusp-overlap or the 3-cusp view for this case
+    let best = null;
+    for (let lao = -60; lao <= 60; lao += 2) for (let cra = -40; cra <= 40; cra += 2) {
+      const vi = this.viewInfo(lao, cra); const ok = kind === 'overlap' ? vi.cuspOverlap : vi.threeCusp; if (!ok) continue;
+      const sc = vi.err + (kind === 'overlap' ? vi.d1 : vi.d2) * 0.5 + (Math.abs(lao) + Math.abs(cra)) * 0.01; if (!best || sc < best.sc) best = { lao, cra, sc };
+    }
+    return best || (kind === 'overlap' ? { lao: -30, cra: -30 } : { lao: 32, cra: 30 });
+  }
+  centreFlex() { // flex that keeps the shaft central at the current position
+    const d = this.dev, lm = this.lm, req = this.path.flexReq(d.s); const reqEff = d.s > lm.ann - 50 ? 0.15 * this.rootBlend() + req * (1 - this.rootBlend()) : req;
+    d.flex = clamp(reqEff, 0, 1); d.lat = 0;
+  }
+  runSim(inp, until, maxFrames = 3000) { // advance the real simulation (no rendering) with held inputs until a condition holds
+    const t0 = this.time; this.input = inp; let g = 0;
+    while (!until() && g++ < maxFrames) { this.update(1 / 30); if (this.fx) this.fx = null; }
+    this.input = {}; this.time = t0;
+  }
+  landingPosition() { // phase 5 start: valve across the annulus, inner-shaft marker on the plane, centred, wire held, cusp-overlap view
+    const d = this.dev, lm = this.lm, c = this.chk;
+    if (d.f <= 0.02 && !d.released) {
+      d.s = lm.ann + DEV.noseL; d.sd = d.s; d.shift = 0; d.twist = 0; this.centreFlex();
+      d.drift = this.driftTotal * smooth(lm.archStart + 30, lm.ascTop + 60, d.s); d.roll -= this.alignErr();
+      this.v.alignFrozen = null; this.wire.hold = true; this.wire.s = Math.max(this.wire.s, lm.ann + 58); this.press = 0.5; this.wtens = 0.3;
+      const cv = this.carmFor('overlap'); this.act.setCarm(cv.lao, cv.cra, true);
+    }
+    c.crossed = true; c.centered = true; c.marker = true; c.rot2 = true;
+  }
+  skipPhase() {
+    if (this.finished || this.phase >= 9) return false;
+    const from = this.phase, to = from + 1, d = this.dev, lm = this.lm, F = this.flags, v = this.v, c = this.chk;
+    this.fx = null; this.fxPending = null; this.input = {}; d.twist = 0;
+    F.skipped = F.skipped || {}; F.skipped[from] = true; this.log('phaseSkipped', { from, to });
+    this.p4Hint = false;
+    if (from === 1) { // femoral entry -> descending aorta, rotation to be set
+      d.s = Math.max(d.s, lm.descStart + 10); d.sd = d.s; d.roll = Math.round(d.roll / 120) * 120 + this.roll2; d.lat = 0; this.centreFlex(); this.setPhase(2);
+    } else if (from === 2) { // rotation: left neutral (markers 2 outer / 1 inner) but NOT credited
+      d.s = clamp(Math.max(d.s, lm.descStart + 10), lm.descStart + 10, lm.archStart - 25); d.sd = d.s; d.roll -= this.rotErr2(); c.rot2 = true; this.centreFlex(); this.setPhase(3);
+    } else if (from === 3) { // arch: unflexed in the ascending aorta
+      c.rot2 = true; d.s = Math.max(d.s, lm.ascDone + 2); d.sd = d.s; this.centreFlex(); d.flex = Math.min(d.flex, 0.2); this.setPhase(4);
+    } else if (from === 4) { // cross and centre -> landing: crossed, centred, marker on the plane (alignment NOT confirmed)
+      if (!c.alignConfirmed) F.alignSkipped = true;
+      this.landingPosition(); this.setPhase(5);
+    } else if (from === 5) { // landing -> 80 % lock, by running the real wheel at the safe slow rate
+      this.landingPosition(); this.press = 0.5; this.wtens = 0.3;
+      this.runSim({ deploy: 1 }, () => d.locked || this.phase !== 5, 2400);
+      if (!d.locked && this.phase === 5) { d.f = 0.8; d.locked = true; d.lockArmed = false; F.stabAt80 = v.stab; this.chk.secondView = false; this.setPhase(6); }
+      if (this.phase === 5) this.setPhase(6);
+      d.locked = true; d.f = Math.min(d.f, 0.8); c.secondView = false;
+    } else if (from === 6) { // 80 % stop -> release phase: unlocked (the second view was not credited, but it is not a MAJOR from this button)
+      d.locked = false; d.lockArmed = false; this.setPhase(7);
+    } else if (from === 7) { // finish the wheel slowly (physics decides depth) -> released
+      d.locked = false; d.lockArmed = false; if (this.cfg.finalFast) this.pacing = 'fast';
+      this.runSim({ deploy: 1 }, () => d.released, 2400);
+      if (!d.released) { d.f = 1; this.release(); }
+      if (this.phase < 8) this.setPhase(8);
+    } else if (from === 8) { // nosecone out -> wire in place, closed, out to the access site (closure left undone)
+      this.wire.hold = true; d.macro = 1; F.phase8Closed = true; d.flex = 0; d.s = Math.min(d.s, lm.skin - 3); d.sd = d.s; d.lat = 0; F.phase8Done = true;
+      this.setPhase(9);
+    }
+    v.speed = 0; v.lastF = d.f; this.pacing = this.dev.released ? 'off' : this.pacing;
+    this.lastSkip = { from, to: this.phase };
+    this.setCoach();
+    this.say(`Phase ${from} (${PHASES[from - 1].name}) skipped. It is marked "Skipped by learner" on the score sheet; the simulation is set up for phase ${this.phase}.`, 9);
+    this.emit('skip', { from, to: this.phase });
+    return true;
+  }
+  finishNow() { // phase 9: 'Finish / show score' (closure left undone is flagged as skipped)
+    if (this.finished || this.phase !== 9) return false;
+    const F = this.flags; if (!F.hemostasis) { F.skipped = F.skipped || {}; F.skipped[9] = true; this.log('phaseSkipped', { from: 9, to: 10 }); }
+    this.say('Finishing: the proctor sheet is shown.', 3); this.finish(); return true;
   }
   confirmAlign() {
     if (this.phase !== 4) { this.say('Commissure alignment is re-checked at the annulus in phase 4.', 3); return; }

@@ -28,6 +28,7 @@ export class UI {
     $('#btnOverlay').addEventListener('click', (e) => { e.stopPropagation(); this.toggleOverlayMenu(); });
     $('#btnLabels').addEventListener('click', () => this.setOverlay('parts', !V.overlay.parts));
     $('#btnSettings').addEventListener('click', () => { this.buildSettings(); $('#settingsModal').hidden = false; });
+    $('#btnSkip').addEventListener('click', () => { if (this.sim.phase >= 9) this.sim.act.finishNow(); else this.sim.act.skipPhase(); this.refresh(); });
     $('#btnReset').addEventListener('click', () => { this.sim.reset(true); this.sim.started = true; });
     $('#btnCut').addEventListener('click', () => { V.cutaway = !V.cutaway; $('#btnCut').textContent = 'Cutaway: ' + (V.cutaway ? 'on' : 'off'); $('#btnCut').classList.toggle('on', V.cutaway); });
     $('#zIn').addEventListener('click', () => { V.zoom = clamp(V.zoom * 1.25, 0.5, 4); });
@@ -88,6 +89,8 @@ export class UI {
   buildStepper() {
     const st = $('#stepper'); st.innerHTML = '';
     PHASES.forEach(p => st.appendChild(el('div', { class: 'chip locked', 'data-p': p.n }, `<i>${p.n}</i><span>${p.short}</span>`)));
+    // optional: tap the NEXT phase circle (only forward by one) to skip the current phase; the header button is the main route
+    st.addEventListener('click', e => { const c = e.target.closest('.chip'); if (!c) return; const S = this.sim; if (!S.finished && +c.dataset.p === S.phase + 1 && S.phase < 9) { S.act.skipPhase(); this.refresh(); } });
   }
   // ---------- controls ----------
   hold(btn, on, off) {
@@ -286,7 +289,8 @@ export class UI {
   refresh() {
     const S = this.sim, d = S.dev, vi = S.viewInfo();
     // stepper
-    document.querySelectorAll('.chip').forEach(c => { const n = +c.dataset.p; const cls = 'chip ' + (n < S.phase || S.finished ? 'done' : n === S.phase ? 'active' : 'locked'); if (c.className !== cls) c.className = cls; });
+    document.querySelectorAll('.chip').forEach(c => { const n = +c.dataset.p; const cls = 'chip ' + (n < S.phase || S.finished ? 'done' : n === S.phase ? 'active' : 'locked') + (n === S.phase + 1 && !S.finished ? ' next' : ''); if (c.className !== cls) c.className = cls; if (n === S.phase + 1 && !S.finished) c.title = 'Tap to skip phase ' + S.phase + ' and go to phase ' + n; else c.removeAttribute('title'); });
+    { const sb = $('#btnSkip'); const txt = S.phase >= 9 ? 'Finish / show score \u25B6' : 'Skip phase \u25B6'; if (sb.textContent !== txt) sb.textContent = txt; sb.disabled = !!S.finished; }
     const P = PHASES[S.phase - 1];
     this.setText('#phaseName', `Phase ${S.phase} of 9 - ${P.name}`);
     this.setText('#coachText', S.coach);
@@ -345,9 +349,10 @@ export class UI {
   // ---------- score sheet ----------
   showScore(sc) {
     const S = this.sim;
-    const rows = sc.rows.map(r => `<tr><td><b>${r.title}</b></td><td class="${r.pass ? 'pass' : 'miss'}">${r.pass ? 'PASS' : 'MISS'}${r.major ? ' <span class="major">MAJOR</span>' : ''}</td><td>${r.result}${r.pass ? '' : `<div class="fb">&ldquo;${r.feedback}&rdquo;</div>`}</td></tr>`).join('');
+    const rows = sc.rows.map(r => `<tr><td><b>${r.title}</b></td><td class="${r.pass ? 'pass' : r.skipped ? 'miss skip' : 'miss'}">${r.pass ? 'PASS' : r.skipped ? 'SKIPPED' : 'MISS'}${r.major ? ' <span class="major">MAJOR</span>' : ''}</td><td>${r.result}${r.pass ? '' : `<div class="fb">&ldquo;${r.feedback}&rdquo;</div>`}</td></tr>`).join('');
     $('#sheet').innerHTML = `<h2>Proctor sheet</h2><div style="color:#9fb6d6;font-size:12.5px">Navitor Vision 27 mm / FlexNav - unofficial training model - ${Math.round(S.time)} s case time</div>
       <table id="scoreTable"><thead><tr><th>Section</th><th>Result</th><th>Detail and proctor feedback</th></tr></thead><tbody>${rows}</tbody></table>
+      ${sc.skipped && sc.skipped.length ? `<div id="skippedBox" class="skipbox"><b>Skipped by learner</b><ul>${sc.skipped.map(q => `<li>${q.text}</li>`).join('')}</ul></div>` : ''}
       <p id="overall"><b>Overall:</b> ${sc.overall}</p>
       <div class="row"><button id="scRetry" class="primary big">Retry / reset case</button><button id="scClose">Close</button></div>`;
     $('#scoreModal').hidden = false;

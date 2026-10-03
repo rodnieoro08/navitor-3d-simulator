@@ -205,4 +205,40 @@ console.log('== contrast injection / unlock / slider ==');
   const f0 = s.dev.f; s.act.stepMm(2); run(3); ok(Math.abs(s.dev.f - f0) < 1e-6, 'at the lock a step does nothing until Unlock');
   const s2 = fresh(); s2.act.stepMm(2); for (let i = 0; i < 90; i++) s2.update(dt); ok(s2.dev.f === 0, 'before phase 5 a step is refused (the wheel gate applies)');
 }
+console.log('== Skip phase button ==');
+{ const s = fresh(); const lm = P.lm; const seen = [];
+  ok(s.phase === 1 && s.act.skipPhase() && s.phase === 2, 'skip 1 -> 2'); ok(s.dev.s >= lm.descStart + 9 && s.dev.f === 0 && !s.fx, 'phase 2 state: in the descending aorta (s=' + s.dev.s.toFixed(0) + ')'); ok(/skipped/i.test(s.coach) && /Phase 1/.test(s.coach), 'coach line says phase 1 was skipped');
+  s.act.skipPhase(); ok(s.phase === 3 && s.chk.rot2 && Math.abs(s.rotErr2()) < 0.01 && !s.flags.rotSetDesc, 'skip 2 -> 3: rotation neutral but not credited');
+  s.act.skipPhase(); ok(s.phase === 4 && s.dev.s >= lm.ascDone + 1 && s.dev.flex <= 0.25, 'skip 3 -> 4: in the ascending aorta, unflexed');
+  s.act.skipPhase(); ok(s.phase === 5 && s.chk.crossed && s.chk.centered && s.chk.marker && !s.chk.alignConfirmed && Math.abs(s.sysZ()) < 0.1 && Math.abs(s.dev.lat) < 0.5 && s.wire.hold && s.viewInfo().cuspOverlap, 'skip 4 -> 5: crossed, centred, marker on the plane, wire held, cusp-overlap view; alignment NOT credited');
+  const f0 = s.dev.f; s.act.wheel(0.02); ok(s.dev.f > f0, 'after skipping to 5 the deployment wheel works (f=' + s.dev.f.toFixed(3) + ')'); s.act.wheel(-0.02);
+  s.act.skipPhase(); ok(s.phase === 6 && s.dev.locked && Math.abs(s.dev.f - 0.8) < 0.006 && !s.chk.secondView && !s.fx, 'skip 5 -> 6: 80% locked (f=' + s.dev.f.toFixed(3) + ')'); ok(s.dev.h > 0 && s.dev.h < 12, 'valve physics state is real (NCC depth ' + s.dev.h.toFixed(1) + ' mm)');
+  s.act.skipPhase(); ok(s.phase === 7 && !s.dev.locked && Math.abs(s.dev.f - 0.8) < 0.006 && !s.flags.major80, 'skip 6 -> 7: unlocked at 80%, no MAJOR from the button');
+  s.act.skipPhase(); ok(s.phase === 8 && s.dev.released && s.dev.f === 1 && !s.fx, 'skip 7 -> 8: released at 100%'); ok(!s.flags.releasedFast, 'skip used the safe wheel speed');
+  s.act.macro && 0; run(s, { macro: 1 }, 5); ok(s.dev.macro >= 1, 'after skipping to 8 the macro slide closes the nosecone');
+  s.act.skipPhase(); ok(s.phase === 9 && s.wire.hold && s.dev.macro === 1 && !s.flags.hemostasis && !s.finished, 'skip 8 -> 9: wire fixed, nosecone closed, closure undone');
+  ok(s.act.skipPhase() === false && s.phase === 9, 'no skip in phase 9');
+  s.act.finishNow(); ok(s.finished && s.score, 'Finish / show score ends in the score sheet');
+  const sc = s.score; ok(JSON.stringify(sc.skipped.map(q => q.phase)) === '[1,2,3,4,5,6,7,8,9]', 'all nine phases recorded as skipped'); ok(sc.rows.every(r => !r.pass && /Skipped by learner/.test(r.result) && /was skipped, so/.test(r.feedback)), 'every row flagged "Skipped by learner" with a proctor sentence'); ok(/Skipped by learner: phases 1, 2/.test(sc.overall), 'overall mentions the skipped phases: ' + sc.overall.slice(0, 80));
+  ok(sc.rows.find(r => r.id === 'depthNcc').feedback.includes('Phase 5 (Cusp overlap: land the inflow) was skipped, so the landing and the slow unsheathing to the 80% lock was not assessed.'), 'sentence format: Phase X was skipped, so Y was not assessed'); }
+{ // normal play after a skip: skip to 5, then do the real thing
+  const s = fresh(); for (let i = 0; i < 4; i++) s.act.skipPhase(); D.press(); D.toLock(); ok(s.phase === 6 && s.dev.locked, 'after skip-to-5, the real wheel reaches the lock'); D.secondView(); D.release('fast'); ok(s.phase === 8, 'then real unlock + release'); D.phase8(); ok(s.phase === 9, 'then real nosecone close and withdrawal -> 9'); ok(D.phase9() && s.finished, 'then real closure finishes');
+  const sk = s.score.skipped.map(q => q.phase); ok(JSON.stringify(sk) === '[1,2,3,4]', 'only phases 1-4 are marked skipped (' + sk + ')'); const r = id => s.score.rows.find(x => x.id === id);
+  ok(r('iliac').skipped && r('rot').skipped && r('align').skipped && r('nose').skipped, 'rows of the skipped phases are flagged'); ok(!r('closure').skipped && r('closure').pass, 'closure done for real is not flagged'); ok(!r('stop80').skipped && !r('depthNcc').skipped, 'rows of phases played for real are not flagged'); }
+{ // skip from every phase, from awkward states: during a fluoro problem, with held inputs, mid-deployment
+  for (let k = 1; k <= 8; k++) { const s = fresh(); let threw = null; try {
+      for (let i = 1; i < k; i++) s.act.skipPhase();
+      s.input = { adv: 1, deploy: 1, rot: 1, flex: 1, wire: 1, macro: 1 }; up(s, 0.5); s.fail && s.fail('closure', { retry: () => { } });
+      const ph = s.phase; const r = s.act.skipPhase(); if (!r || s.phase !== ph + 1 || s.fx) threw = 'k=' + k + ' phase ' + ph + ' -> ' + s.phase + ' fx ' + !!s.fx;
+      for (let i = 0; i < 12 && s.phase < 9; i++) s.act.skipPhase(); if (s.phase !== 9) threw = threw || 'k=' + k + ' did not reach 9';
+      up(s, 2); s.act.finishNow(); if (!s.finished) threw = threw || 'k=' + k + ' not finished';
+    } catch (e) { threw = 'k=' + k + ' threw ' + e.message; }
+    ok(!threw, 'skip from phase ' + k + ' with held inputs and an active fluoro problem, onwards to the score sheet' + (threw ? ': ' + threw : '')); } }
+{ // mid-play states: partly deployed, locked, unlocked and partly finished
+  const a = fresh(); to(a, 5); D.press(); D.deployTo(0.4); a.act.skipPhase(); ok(a.phase === 6 && a.dev.locked && Math.abs(a.dev.f - 0.8) < 0.006, 'skip from phase 5 at 40% -> locked 80%');
+  const b = toLockedPhase6(); D.secondView(); b.act.unlock(); D.deployTo(0.9); ok(b.phase === 7, 'phase 7 reached'); b.act.skipPhase(); ok(b.phase === 8 && b.dev.released, 'skip from phase 7 at 90% -> released');
+  const c = toLockedPhase6(); c.act.skipPhase(); ok(c.phase === 7 && !c.dev.locked, 'skip from phase 6 -> 7 unlocked'); c.act.skipPhase(); ok(c.phase === 8, 'and on to 8');
+  const e = fresh(); to(e, 5); D.press(); D.toLock(); D.secondView(); D.release('fast'); e.act.toggleHold(); e.act.skipPhase(); ok(e.phase === 9 && e.wire.hold && e.dev.macro === 1, 'skip from phase 8 before fixing the wire -> wire held, nosecone closed'); }
+{ const s = fresh(); for (let i = 0; i < 8; i++) s.act.skipPhase(); s.act.finishNow(); const t = JSON.stringify(s.score.rows.map(r => r.pass)); for (let n = 0; n < 4; n++) { const q = fresh(); for (let i = 0; i < 8; i++) q.act.skipPhase(); q.act.finishNow(); if (JSON.stringify(q.score.rows.map(r => r.pass)) !== t) { ok(false, 'repeatable'); } } ok(true, 'repeatedly skipping 1 -> 9 is deterministic and never throws'); }
+{ const s = fresh(); D.goPhase1(); D.goDesc(); D.setRotation(); D.goArch(); D.goCross(); D.alignAt(); s.act.setCarm(-30, -30); D.press(); D.toLock(); D.secondView(); D.release('fast'); D.phase8(); D.phase9(); ok(!s.score.skipped.length && s.score.rows.every(r => !r.skipped), 'a normal full case has no skipped rows'); }
 console.log(`\n${pass} passed, ${fail} failed`); out.forEach(o => console.log(o)); process.exit(fail ? 1 : 0);
