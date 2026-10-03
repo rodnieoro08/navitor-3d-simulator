@@ -1,4 +1,4 @@
-import { launch } from '../pw.mjs';
+import { launch } from './pw.mjs';
 const prof = process.argv[2] || 'desktop';
 const mobile = prof === 'phone';
 const { browser, page, logs } = await launch(mobile ? 390 : 1280, mobile ? 844 : 800, mobile);

@@ -158,7 +158,14 @@ export class Views {
     const O = this.overlay, vi = S.viewInfo(), d = S.dev, rd = new THREE.Vector3().copy(F.n).multiplyScalar(S.rootDelta || 0);
     ctx.font = `${px(12)}px ui-monospace, Menlo, Consolas, monospace`; ctx.textBaseline = 'top';
     const fluo = this.mode === 'fluoro';
-    const txt = (s, x, y, col = '#d7e3f4', align = 'left') => { ctx.fillStyle = 'rgba(0,0,0,0.55)'; const m = ctx.measureText(s).width; const xx = align === 'right' ? x - m : x; ctx.fillRect(xx - 3, y - 2, m + 6, px(16)); ctx.fillStyle = col; ctx.fillText(s, xx, y); };
+    const placed = this.labelRects = []; // label boxes of this frame: later labels are nudged so none overlap
+    const txt = (s, x, y, col = '#d7e3f4', align = 'left') => {
+      const m = ctx.measureText(s).width, hh = px(16); let xx = align === 'right' ? x - m : x; xx = Math.max(px(3) + 3, Math.min(xx, w - m - px(3) - 3));
+      let yy = y; const hit = (yv) => placed.some(r => xx - 3 < r.x + r.w && xx - 3 + m + 6 > r.x && yv - 2 < r.y + r.h && yv - 2 + hh > r.y);
+      for (let k = 0; k < 8 && hit(yy); k++) yy += hh + px(1);
+      if (hit(yy) || yy + hh > h) { yy = y; for (let k = 0; k < 8 && hit(yy); k++) yy -= hh + px(1); }
+      placed.push({ x: xx - 3, y: yy - 2, w: m + 6, h: hh, s });
+      ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(xx - 3, yy - 2, m + 6, hh); ctx.fillStyle = col; ctx.fillText(s, xx, yy); };
     const inRoot = this.rootMode;
     // guides in the root
     if (O.guides && S.phase >= 4 || (O.guides && S.phase === 9 && inRoot)) {

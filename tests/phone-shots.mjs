@@ -1,4 +1,4 @@
-import { launch } from '../pw.mjs';
+import { launch } from './pw.mjs';
 const { browser, page, logs } = await launch(390, 844, true);
 await page.goto('file://'+process.cwd()+'/index.html'); await page.addScriptTag({ path: 'tests/drv.js' });
 await page.check('#ack'); await page.click('#startBtn'); await page.waitForTimeout(600);

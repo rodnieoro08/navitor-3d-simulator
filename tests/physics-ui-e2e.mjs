@@ -1,6 +1,6 @@
 // Real-UI physics runs: (A) slow wheel + forward pressure + slight wire pull lands 3-4.5 mm; (B) fast release unpaced pops high.
 // Hooks are used ONLY to reach phase 5 quickly (phases 1-4 are covered by e2e.mjs) and to READ state.
-import { launch } from '../pw.mjs';
+import { launch } from './pw.mjs';
 const prof = process.argv[2] || 'desktop'; const only = process.argv[3];
 const mobile = prof === 'phone';
 let pass = 0, bad = 0; const fails = [];

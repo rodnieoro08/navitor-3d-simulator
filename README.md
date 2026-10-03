@@ -70,3 +70,11 @@ Deployment and seating live in `src/physics.js` (pure, deterministic, unit-teste
 | resheathLockRiseN | 22 | N | extra force that builds as the lock is approached | estimate (uncalibrated) |
 | resheathHystN | 5 | N | extra force on the way back (recapture hysteresis) | estimate (uncalibrated) |
 | resheathMaxN | 45 | N | force that fills the feel gauge | estimate (uncalibrated) |
+
+## Handle controls (v4)
+- **Deployment wheel**: clockwise = deploy, counter-clockwise = resheath (inside the white zone only).
+- **MICRO wheel (fine recapture only)**: `-` = fine resheath in 0.25 mm steps (also from the 80% lock), `+` = undo part of a fine recapture, never beyond where the recapture started. It never deploys, never moves the whole system and never closes the nosecone; outside a recapture the sim refuses with a coaching line.
+- **Macro slide**: closes the nosecone, only after release.
+- Phase 4: *Confirm commissure alignment* is no longer a hard gate. *Skip alignment check* (or simply starting the wheel once the valve is crossed, centred and the marker is on the annular plane) moves on to the landing and records a scored miss on the commissural-alignment row ("not re-checked at the annulus after the arch"). Crossing, centring and the annular-plane marker stay gated.
+- The built `index.html` carries `<meta name="navitor-build" content="...">` so a deployed page can be identified.
+- Tests: `node tests/logic.mjs`, `tests/physics.mjs`, then `e2e.mjs`, `unlock-e2e.mjs`, `valve-contrast-e2e.mjs`, `physics-ui-e2e.mjs`, `handle-layout-e2e.mjs`, `skip-align-e2e.mjs` (each with `desktop` or `phone`; they need `tests/pw.mjs` and Chrome at `/usr/bin/google-chrome`; `mkdir -p shots/final shots/v4` first).

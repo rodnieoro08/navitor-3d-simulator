@@ -151,33 +151,33 @@ export class UI {
   // ---------- handle diagram (SVG) ----------
   buildHandle() {
     const S = this.sim, box = $('#handleBox');
-    box.innerHTML = `<svg id="hsvg" viewBox="0 0 440 300" role="img" aria-label="FlexNav handle diagram">
-      <rect x="14" y="62" width="412" height="122" rx="46" fill="#16233b" stroke="#35507f" stroke-width="2"/>
-      <text x="26" y="20" fill="#9fb6d6" font-size="12">FlexNav handle (teaching diagram, not to scale)</text>
-      <g id="wheel" transform="translate(120 123)" style="cursor:grab"><circle r="66" fill="#0e1a30" stroke="#5b95ff" stroke-width="3"/><g id="wheelRot"></g><circle r="22" fill="#1f3358" stroke="#5b95ff"/><text y="4" text-anchor="middle" fill="#cfe3ff" font-size="10">DEPLOY</text></g>
-      <text x="120" y="208" text-anchor="middle" fill="#cfe3ff" font-size="11.5">Deployment / resheath wheel (clockwise = deploy)</text>
-      <g id="micro" transform="translate(252 123)" style="cursor:pointer"><circle r="30" fill="#0e1a30" stroke="#ffd24a" stroke-width="2.5"/><g id="microRot"></g><text y="3" text-anchor="middle" fill="#ffe9a8" font-size="9">MICRO</text></g>
-      <g id="microBtns"><rect id="muM" x="214" y="162" width="36" height="30" rx="6" fill="#2a2a14" stroke="#ffd24a"/><text x="232" y="182" text-anchor="middle" fill="#ffe9a8" font-size="16" style="pointer-events:none">-</text>
-      <rect id="muP" x="256" y="162" width="36" height="30" rx="6" fill="#2a2a14" stroke="#ffd24a"/><text x="274" y="182" text-anchor="middle" fill="#ffe9a8" font-size="16" style="pointer-events:none">+</text></g>
-      <text x="252" y="208" text-anchor="middle" fill="#ffe9a8" font-size="11.5">Micro-adjustment wheel</text>
-      <g id="macro"><rect id="mac1" x="322" y="74" width="92" height="42" rx="12" fill="#10372f" stroke="#2ee6c4" stroke-width="2"/><rect id="mac2" x="322" y="130" width="92" height="42" rx="12" fill="#10372f" stroke="#2ee6c4" stroke-width="2"/>
-      <text x="368" y="92" text-anchor="middle" fill="#bffff2" font-size="10" style="pointer-events:none">MACRO SLIDE</text><text x="368" y="106" text-anchor="middle" fill="#bffff2" font-size="10" style="pointer-events:none">close nosecone</text>
-      <text x="368" y="148" text-anchor="middle" fill="#bffff2" font-size="10" style="pointer-events:none">MACRO SLIDE</text><text x="368" y="162" text-anchor="middle" fill="#bffff2" font-size="10" style="pointer-events:none">hold both = close</text></g>
-      <text x="368" y="208" text-anchor="middle" fill="#bffff2" font-size="11.5">Macro-slide buttons</text>
-      <g id="lockbar" transform="translate(26 236)"><text x="0" y="-8" fill="#cfe3ff" font-size="11.5">Deployment lock - deployed length</text>
-        <rect x="0" y="0" width="288" height="22" rx="4" fill="#f4f7ff"/><rect x="288" y="0" width="72" height="22" rx="4" fill="#6b7280"/>
-        <text x="144" y="15" text-anchor="middle" fill="#223" font-size="11">white zone: recapturable</text><text x="324" y="15" text-anchor="middle" fill="#eee" font-size="10">gray: no return</text>
-        <rect id="fillBar" x="0" y="22" width="0" height="6" fill="#4c8dff"/><path id="caret" d="M0 34 l-6 9 h12z" fill="#ffd24a"/>
+    box.innerHTML = `<svg id="hsvg" viewBox="0 0 440 328" role="img" aria-label="FlexNav handle diagram">
+      <text x="14" y="16" fill="#9fb6d6" font-size="11">FlexNav handle (teaching diagram, not to scale)</text>
+      <rect x="10" y="26" width="420" height="144" rx="46" fill="#16233b" stroke="#35507f" stroke-width="2"/>
+      <g id="wheel" transform="translate(84 98)" style="cursor:grab"><circle r="56" fill="#0e1a30" stroke="#5b95ff" stroke-width="3"/><g id="wheelRot"></g><circle r="20" fill="#1f3358" stroke="#5b95ff"/><text y="3.5" text-anchor="middle" fill="#cfe3ff" font-size="9.5">DEPLOY</text></g>
+      <text id="tWheel1" x="84" y="190" text-anchor="middle" fill="#cfe3ff" font-size="10.5">Deployment / resheath wheel</text><text id="tWheel2" x="84" y="207" text-anchor="middle" fill="#9fb6d6" font-size="10">(clockwise = deploy)</text>
+      <g id="micro" transform="translate(226 78)" style="cursor:pointer"><circle r="28" fill="#0e1a30" stroke="#ffd24a" stroke-width="2.5"/><g id="microRot"></g><text id="tMicroIn" y="3" text-anchor="middle" fill="#ffe9a8" font-size="9">MICRO</text></g>
+      <g id="microBtns"><rect id="muM" x="184" y="118" width="38" height="30" rx="6" fill="#2a2a14" stroke="#ffd24a"/><text x="203" y="138" text-anchor="middle" fill="#ffe9a8" font-size="16" style="pointer-events:none">-</text>
+      <rect id="muP" x="230" y="118" width="38" height="30" rx="6" fill="#2a2a14" stroke="#ffd24a"/><text x="249" y="138" text-anchor="middle" fill="#ffe9a8" font-size="16" style="pointer-events:none">+</text></g>
+      <text id="tMicro1" x="226" y="190" text-anchor="middle" fill="#ffe9a8" font-size="10.5">MICRO (fine recapture only)</text><text id="tMicro2" x="226" y="207" text-anchor="middle" fill="#c9b36a" font-size="10">- = resheath, + = undo</text>
+      <g id="macro"><rect id="mac1" x="304" y="38" width="118" height="56" rx="12" fill="#10372f" stroke="#2ee6c4" stroke-width="2"/><rect id="mac2" x="304" y="102" width="118" height="56" rx="12" fill="#10372f" stroke="#2ee6c4" stroke-width="2"/>
+      <text x="363" y="62" text-anchor="middle" fill="#bffff2" font-size="10" style="pointer-events:none">MACRO SLIDE</text><text x="363" y="76" text-anchor="middle" fill="#bffff2" font-size="10" style="pointer-events:none">close nosecone</text>
+      <text x="363" y="126" text-anchor="middle" fill="#bffff2" font-size="10" style="pointer-events:none">MACRO SLIDE</text><text x="363" y="140" text-anchor="middle" fill="#bffff2" font-size="10" style="pointer-events:none">hold both = close</text></g>
+      <text id="tMacro1" x="363" y="190" text-anchor="middle" fill="#bffff2" font-size="10.5">Macro-slide buttons</text><text id="tMacro2" x="363" y="207" text-anchor="middle" fill="#7fcfbf" font-size="10">nosecone, after release</text>
+      <g id="lockbar" transform="translate(20 254)"><text id="tLockHead" x="0" y="-12" fill="#cfe3ff" font-size="11">Deployment lock - deployed length</text>
+        <rect x="0" y="0" width="288" height="22" rx="4" fill="#f4f7ff"/><rect x="288" y="0" width="112" height="22" rx="4" fill="#6b7280"/>
+        <text id="tWhite" x="144" y="15" text-anchor="middle" fill="#223" font-size="11">white zone: recapturable</text><text id="tGray" x="344" y="15" text-anchor="middle" fill="#fff" font-size="10.5">gray: no return</text>
+        <rect id="fillBar" x="0" y="22" width="0" height="6" fill="#4c8dff"/><path id="caret" d="M0 30 l-6 9 h12z" fill="#ffd24a"/>
         <g id="lockIcon" transform="translate(288 -2)" style="cursor:pointer"><rect x="-14" y="-4" width="28" height="30" rx="6" fill="#0e1a30" stroke="#ffd24a" stroke-width="1.5" opacity="0.001"/><rect id="lockBody" x="-8" y="8" width="16" height="12" rx="2" fill="#ffd24a"/><path id="lockShackle" d="M-5 8 v-4 a5 5 0 0 1 10 0 v4" fill="none" stroke="#ffd24a" stroke-width="2.5"/></g>
-        <text x="288" y="56" text-anchor="middle" fill="#ffd24a" font-size="10.5">80% lock - tap here or press Unlock</text></g>
+        <text id="tLockHint" x="288" y="60" text-anchor="middle" fill="#ffd24a" font-size="10.5">80% lock: tap the lock or press Unlock</text></g>
     </svg>
 <div class="hside">
     <div class="hbtns three"><button id="hRes" class="hold">&#9664; Resheath</button><button id="hDep" class="hold">Deploy slow &#9654;</button><button id="hDepF" class="hold">Deploy fast &#9654;&#9654;</button></div>
-    <div class="hbtns"><button id="hMacro" class="hold" style="grid-column:span 2">Macro slide: close nosecone</button><button id="hUnlock">Unlock (U)</button><button id="hMuM" class="hold">Micro &minus;</button><button id="hMuP" class="hold" style="grid-column:span 2">Micro +</button></div>
+    <div class="hbtns"><button id="hMacro" class="hold" style="grid-column:span 2">Macro slide: close nosecone</button><button id="hUnlock">Unlock (U)</button><button id="hMuM" class="hold" title="MICRO wheel: fine recapture only">Micro &minus; (fine recapture)</button><button id="hMuP" class="hold" title="MICRO wheel: fine recapture only">Micro + (undo)</button></div>
         <div class="speed"><span id="spdTxt" class="ro">wheel speed: -</span></div><div class="gauge"><i id="gSpd"></i></div><div class="speed"><span id="fTxt" class="ro">deployed 0%</span></div><div class="speed"><span id="feelTxt" class="ro">recapture feel: free</span></div><div class="gauge"><i id="gFeel"></i></div>
 <input type="range" id="wheelSlider" min="0" max="100" value="0" aria-label="Deployment fraction (fallback slider)"></div>`;
     const wr = box.querySelector('#wheelRot');
-    for (let i = 0; i < 12; i++) { const a = i * 30; wr.appendChild(el('rect', { x: -3, y: -66, width: 6, height: 14, fill: '#5b95ff', transform: `rotate(${a})` })); }
+    for (let i = 0; i < 12; i++) { const a = i * 30; wr.appendChild(el('rect', { x: -3, y: -56, width: 6, height: 12, fill: '#5b95ff', transform: `rotate(${a})` })); }
     wr.innerHTML = wr.innerHTML; // reparse svg
     const mr = box.querySelector('#microRot'); mr.innerHTML = Array.from({ length: 8 }, (_, i) => `<rect x="-2" y="-30" width="4" height="8" fill="#ffd24a" transform="rotate(${i * 45})"/>`).join('');
     this.svg = box.querySelector('svg');
@@ -198,8 +198,8 @@ export class UI {
     this.hold(box.querySelector('#hDepF'), () => { S.hold('deploy', 1); S.hold('deployFast', 1); }, () => { S.hold('deploy', 0); S.hold('deployFast', 0); });
     this.hold(box.querySelector('#hRes'), () => { S.hold('deploy', -1); S.hold('deployFast', 0); }, () => { S.hold('deploy', 0); });
     // micro
-    const muRep = (dir) => { let iv = null; return [() => { S.act.microStep(dir * 0.5); iv = setInterval(() => S.act.microStep(dir * 0.5), 140); }, () => clearInterval(iv)]; };
-    for (const [id, dir] of [['#muM', -1], ['#muP', 1], ['#micro', 1]]) { const r = box.querySelector(id); const [a, b] = muRep(dir); r.style.cursor = 'pointer'; r.addEventListener('pointerdown', e => { e.preventDefault(); r.setPointerCapture(e.pointerId); a(); }); r.addEventListener('pointerup', b); r.addEventListener('pointercancel', b); }
+    const muRep = (dir) => { let iv = null; return [() => { S.act.microStep(dir * 0.25); iv = setInterval(() => S.act.microStep(dir * 0.25), 140); }, () => clearInterval(iv)]; };
+    for (const [id, dir] of [['#muM', -1], ['#muP', 1], ['#micro', -1]]) { const r = box.querySelector(id); const [a, b] = muRep(dir); r.style.cursor = 'pointer'; r.addEventListener('pointerdown', e => { e.preventDefault(); r.setPointerCapture(e.pointerId); a(); }); r.addEventListener('pointerup', b); r.addEventListener('pointercancel', b); }
     for (const [id, dir] of [['#hMuM', -1], ['#hMuP', 1]]) { const [a, b] = muRep(dir); this.hold(box.querySelector(id), a, b); }
     // slider fallback
     const sl = box.querySelector('#wheelSlider'); this.sliderDown = false; sl.addEventListener('pointerdown', () => { this.sliderDown = true; }); const sUp = () => { this.sliderDown = false; sl.blur(); }; sl.addEventListener('pointerup', sUp); sl.addEventListener('pointercancel', sUp); sl.addEventListener('change', () => { if (!this.sliderDown) sl.blur(); });
@@ -239,7 +239,7 @@ export class UI {
     // contextual actions
     const acts = [];
     if (S.phase === 2) acts.push(['Confirm rotation set', 'confirmRotation']);
-    if (S.phase === 4) acts.push(['Confirm commissure alignment', 'confirmAlign']);
+    if (S.phase === 4) { acts.push(['Confirm commissure alignment', 'confirmAlign']); acts.push(['Skip alignment check', 'skipAlign', S.p4Ready() ? 'act skip attn' : 'act skip']); }
     if (S.phase === 6) acts.push(['Confirm 3-cusp check', 'confirmSecondView']);
     if (S.phase === 6 && S.dev.locked) acts.push(['Unlock 80% lock (U)', 'unlock', S.chk.secondView ? 'act attn' : 'act']);
     const key = acts.map(a => a[0] + (a[2] || '')).join('|');
@@ -269,7 +269,8 @@ export class UI {
     $('#bIliac').disabled = !(S.phase === 1 || S.phase === 9 || S.phase === 8);
     // handle
     const rot = document.getElementById('wheelRot'); const a = d.f * 1800; rot.setAttribute('transform', `rotate(${a})`);
-    document.getElementById('microRot').setAttribute('transform', `rotate(${S.sysZ() * 60})`);
+    document.getElementById('microRot').setAttribute('transform', `rotate(${(d.retractMm || 0) * 40})`);
+    { const rc = (S.phase === 5 || S.phase === 6) && d.f > 0.02; for (const id of ['#hMuM', '#hMuP', '#muM', '#muP', '#micro']) { const e = $(id); e.classList.toggle('dim', !rc); } }
     const bx = d.f * 360; $('#fillBar').setAttribute('width', bx); $('#caret').setAttribute('transform', `translate(${bx} 0)`);
     $('#lockBody').setAttribute('fill', d.locked ? '#ff6b57' : '#7dff9a'); $('#lockShackle').setAttribute('stroke', d.locked ? '#ff6b57' : '#7dff9a'); $('#lockShackle').setAttribute('d', d.locked ? 'M-5 8 v-4 a5 5 0 0 1 10 0 v4' : 'M-5 8 v-4 a5 5 0 0 1 10 0 v-1');
     const mc = d.released && d.macro < 1 && S.phase === 8; for (const id of ['#mac1', '#mac2']) { $(id).setAttribute('fill', mc ? '#146c58' : '#10372f'); $(id).setAttribute('opacity', (d.released && S.phase === 8) ? 1 : 0.35); }

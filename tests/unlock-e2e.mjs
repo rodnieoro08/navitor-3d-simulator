@@ -1,6 +1,6 @@
 // Real-UI-only test of: 80% lock -> second view -> Unlock -> 100% -> release -> phase 8.
 // Hooks are used ONLY to reach phase 5 quickly (phases 1-4 are covered by e2e.mjs) and to READ state.
-import { launch } from '../pw.mjs';
+import { launch } from './pw.mjs';
 const prof = process.argv[2] || 'desktop'; const only = process.argv[3];
 const mobile = prof === 'phone';
 let pass = 0, bad = 0; const fails = [];

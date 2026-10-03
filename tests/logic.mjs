@@ -62,6 +62,20 @@ console.log('== phase 3 ==');
 console.log('== phase 4 ==');
 { const s = fresh(); to(s, 4); s.act.flexSet(0.15); run(s, { adv: 1 }, 40); s.input = {}; ok(s.dev.s < P.lm.ann + 60, 'nosecone sits at the wire tip'); s.act.setHold(false); run(s, { adv: 1 }, 10); ok(s.fx && s.fx.type === 'apex', 'advancing with a free wire pushes the wire into the apex -> fail: ' + (s.fx && s.fx.type)); waitRetry(s); ok(s.wire.s <= P.lm.ann + 60, 'wire restored'); }
 { const s = fresh(); to(s, 4); D.goCross(); s.act.setCarm(-30, -30); s.act.rotateStep(-s.alignErr()); s.dev.s += 6; s.act.confirmAlign(); up(s, 0.3); ok(s.phase === 4, 'not centred on the annular plane -> phase 5 withheld'); }
+
+console.log('== phase 4: alignment confirmation no longer blocks the gate ==');
+{ const s = fresh(); to(s, 4); ok(s.act.skipAlign() === false && s.phase === 4 && /Cross the valve/.test(s.note), 'skip refused before crossing: "' + s.note + '"');
+  D.goCross(); s.act.setCarm(-30, -30); up(s, 0.3); ok(s.phase === 4 && !s.chk.alignConfirmed && s.chk.crossed && s.chk.centered && s.chk.marker, 'crossed + centred + marker, alignment NOT confirmed: stays in phase 4 until the learner proceeds');
+  ok(/alignment/i.test(s.coach) && /scored miss/i.test(s.coach), 'phase 4 coach explains the option: "' + s.coach.slice(-150) + '"');
+  s.act.skipAlign(); ok(s.phase === 5 && s.flags.alignSkipped && !s.chk.alignConfirmed, 'Skip alignment check -> phase 5, flagged');
+  ok(/not re-checked at the annulus/i.test(s.note) && /scored/i.test(s.note), 'coach line: "' + s.note + '"'); ok(/skipped the alignment/i.test(s.coach), 'phase 5 coach keeps the reminder');
+  D.press(); D.toLock(); D.secondView(); D.release('fast'); D.phase8(); D.phase9(); ok(s.finished, 'case can be finished after a skipped alignment check'); }
+{ const s = fresh(); to(s, 4); D.goCross(); s.act.setCarm(-30, -30); s.act.rotateStep(-s.alignErr()); s.act.skipAlign(); ok(s.phase === 5, 'skip also works with the posts aligned');
+  D.press(); D.toLock(); D.secondView(); D.release('fast'); D.phase8(); D.phase9(); const sh = s.score; const r = sh.rows.find(x => x.id === 'align');
+  ok(r && !r.pass && /not re-checked at the annulus after the arch/i.test(r.feedback), 'align row is a scored miss with the proctor line: "' + (r && r.feedback.slice(0, 90)) + '"'); ok(!sh.rows.filter(x => x.id !== 'align').some(x => !x.pass && x.major), 'no other row is affected by the skip'); }
+{ const s = fresh(); to(s, 4); D.goCross(); s.act.setCarm(-30, -30); s.dev.s += 6; up(s, 0.3); ok(s.act.skipAlign() === false && s.phase === 4, 'skip does NOT bypass the marker/plane gate: "' + s.note + '"'); s.act.wheel(0.05); ok(s.phase === 4 && s.dev.f === 0, 'wheel does not start in phase 4 when the plane gate fails'); }
+{ const s = fresh(); to(s, 4); D.goCross(); s.act.setCarm(-30, -30); up(s, 0.3); s.act.wheel(0.02); up(s, 0.1); ok(s.phase === 5 && s.flags.alignSkipped, 'starting the deployment wheel with every other gate met also continues (skipped alignment is flagged)'); }
+{ const s = fresh(); to(s, 4); D.goCross(); s.act.setCarm(-30, -30); s.act.rotateStep(-s.alignErr()); s.act.confirmAlign(); up(s, 0.2); ok(s.phase === 5 && !s.flags.alignSkipped, 'confirming still advances normally, no flag'); }
 console.log('== phase 5/6 ==');
 { const s = toLockedPhase6(); ok(s.phase === 6 && s.dev.locked && Math.abs(s.dev.f - 0.8) < 0.001, 'lock engages at 80%, phase 6'); ok(s.dev.h >= 3 && s.dev.h <= 4.5 && s.dev.h - s.dev.tilt >= 3 - 0.05, `good depth NCC ${s.dev.h.toFixed(2)} / LCC ${(s.dev.h - s.dev.tilt).toFixed(2)}`);
   s.act.wheel(0.05); ok(Math.abs(s.dev.f - 0.8) < 1e-6, 'wheel cannot go past lock without unlock');
@@ -77,6 +91,24 @@ console.log('== phase 5/6 ==');
   s.act.setPacing('fast'); const f0 = s.flags.releasedUnpaced; ok(!f0, 'rapid pacing set'); s.input = { deploy: 1, deployFast: 1 }; let g = 0; while (s.phase === 7 && g++ < 5000) s.update(dt); s.input = {}; ok(s.phase === 8 && s.flags.releasedFast, 'finishing the wheel fast after 80% is flagged (speed matters)'); }
 { const s = toLockedPhase6(); D.secondView(); s.act.unlock(); s.input = { deploy: 1 }; let g = 0; while (s.phase === 7 && g++ < 9000) s.update(dt); s.input = {}; ok(s.flags.releasedUnpaced, 'final release without rapid pacing (case card: rapid) pops the valve up'); }
 { const s = toLockedPhase6(); ok(s.dev.f <= 0.8, ''); }
+
+console.log('== MICRO wheel = fine recapture only ==');
+{ const s = fresh(); D.goPhase1(); s.dev.f = 0; ok(s.act.microStep(-0.25) === false && /fine recapture only/i.test(s.note) && s.dev.f === 0, 'micro refused in phase 1 with coaching: "' + s.note + '"');
+  D.goDesc(); D.setRotation(); D.goArch(); const z = s.dev.s; s.act.microStep(0.5); s.act.microStep(-0.5); ok(s.dev.s === z && s.flags.microWrong >= 2, 'micro never moves the whole system (phase 4)'); }
+{ const s = fresh(); to(s, 5); ok(s.act.microStep(-0.25) === false && /Nothing to recapture/i.test(s.note), 'phase 5, valve still in the capsule: nothing to recapture - "' + s.note + '"');
+  ok(s.act.microStep(0.25) === false && s.dev.f === 0, 'micro + cannot deploy from 0');
+  D.deployTo(0.5); const f0 = s.dev.f; ok(s.act.microStep(0.25) === false && s.dev.f === f0 && /cannot deploy/i.test(s.note), 'micro + never deploys forward (f stays ' + f0.toFixed(3) + '): "' + s.note + '"');
+  for (let i = 0; i < 4; i++) s.act.microStep(-0.25); up(s, 0.2); ok(s.dev.f < f0 - 0.015 && s.dev.f > f0 - 0.03, 'micro - resheaths in fine steps (0.25 mm each): ' + f0.toFixed(3) + ' -> ' + s.dev.f.toFixed(3));
+  ok(s.v.resheathing && s.dev.fv > s.dev.f, 'fine recapture uses the same hysteresis (frame stays open ' + s.dev.fv.toFixed(3) + ')');
+  const f1 = s.dev.f; s.act.microStep(0.25); ok(s.dev.f > f1 && s.dev.f <= f0 + 1e-9, 'micro + only walks back toward where the recapture began');
+  for (let i = 0; i < 40; i++) s.act.microStep(0.25); ok(s.dev.f <= f0 + 1e-9, 'micro + can never pass the recapture start (' + s.dev.f.toFixed(3) + ' <= ' + f0.toFixed(3) + ')'); }
+{ const s = toLockedPhase6(); const fl = s.dev.f; ok(s.act.microStep(0.25) === false && s.dev.f === fl && s.dev.locked, 'at the 80% lock micro + does nothing');
+  ok(s.act.microStep(-0.25) === true && s.dev.f < fl && !s.dev.locked, 'fine recapture works from the 80% lock'); ok(s.flags.recapAttempts >= 1, 'counted as a recapture'); }
+{ const s = toLockedPhase6(); D.secondView(); s.act.unlock(); const f = s.dev.f; ok(s.phase === 7, 'phase 7'); ok(s.act.microStep(-0.25) === false && s.dev.f === f && /past the lock/i.test(s.note), 'past the lock micro is refused: "' + s.note + '"'); s.act.microStep(0.25); ok(s.dev.f === f, 'micro + past the lock does nothing');
+  s.act.setPacing('fast'); s.input = { deploy: 1 }; let g = 0; while (s.phase === 7 && g++ < 9000) s.update(dt); s.input = {}; ok(s.phase === 8, 'deployment wheel still finishes the release'); ok(s.act.microStep(-0.5) === false && /MACRO/i.test(s.note) && s.dev.macro === 0, 'phase 8: micro does not close/recapture the nosecone: "' + s.note + '"');
+  s.input = { microHold: -1 }; up(s, 1); s.input = {}; ok(s.dev.macro === 0 && s.dev.f === 1, 'held micro in phase 8 has no effect on macro or deployment'); s.input = { macro: 1 }; D.phase8; }
+{ const s = toLockedPhase6(); const d0 = s.flags.finalDepthNcc; for (const f of [0.3]) { /* depth is unchanged by micro attempts */ }
+  const h = s.dev.h; s.act.microStep(0.5); s.act.microStep(0.5); up(s, 1); ok(Math.abs(s.dev.h - h) < 0.4, 'micro + attempts do not move the valve depth'); }
 // too deep
 { const s = fresh(); to(s, 5); s.act.setPress(0.9); s.act.setWireTension(0.0); s.act.setCarm(-30, -30); D.deployTo(0.8); ok(s.phase === 6 && s.dev.h > 4.5, 'deep setup: NCC ' + s.dev.h.toFixed(2) + ' mm > 4.5');
   s.act.setCarm(32, 30); s.act.confirmSecondView(); ok(!s.chk.secondView && /DEEP/.test(s.note), 'second view rejects the deep valve: ' + s.note);

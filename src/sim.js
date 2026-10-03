@@ -22,10 +22,10 @@ export const COACH = {
   2: 'Descending aorta: rotate (< 60 deg, never against resistance) until 2 Vision markers sit on the OUTER curve and 1 on the INNER curve, then confirm. Rotation can be lost in the arch - you will re-check it at the annulus.',
   3: 'Arch: flex the capsule to follow the horizontal aorta and stay central on the wire. Do not ride the greater curve. Unflex once you are in the ascending aorta.',
   4: 'Cross the valve holding the wire, centre the shaft in the ascending aorta, put the inner-shaft marker on the annular plane, and re-check commissure alignment in the cusp-overlap view.',
-  5: 'Cusp overlap, parallax gone: NCC alone on the left, pigtail at the NCC nadir. Watch only the NCC. Slow wheel, inflow first. Forward pressure on the system, a little pull on the wire.',
-  6: 'Lock engaged at 80%. Recapture still works. Leave cusp overlap, apply the 3-cusp plan, kill parallax, read the LEFT cusp side (ignore the NCC), confirm both depths and the posts.',
+  5: 'Cusp overlap, parallax gone: NCC alone on the left, pigtail at the NCC nadir. Watch only the NCC. Slow wheel, inflow first. Forward pressure on the system, a little pull on the wire. (Resheathing? The MICRO wheel is for fine recapture only.)',
+  6: 'Lock engaged at 80%. Recapture still works (MICRO wheel = fine recapture only). Leave cusp overlap, apply the 3-cusp plan, kill parallax, read the LEFT cusp side (ignore the NCC), confirm both depths and the posts.',
   7: 'Unlock and finish the wheel slowly - speed after 80% still matters. Use the pacing the case card asks for. Leaflets open, cuff seals.',
-  8: 'Fix the wire, advance it, centre the nosecone in the frame, close the tip with the MACRO slide (not the wheel), then withdraw across the arch and out the iliac holding the wire.',
+  8: 'Fix the wire, advance it, centre the nosecone in the frame, close the tip with the MACRO slide (not the deployment or MICRO wheel), then withdraw across the arch and out the iliac holding the wire.',
   9: 'Completion aortogram (PVL, coronary fill, depth; the Inject contrast button counts once the valve is released), iliac/femoral angiogram, two preclose devices, then hemostasis. The case is not over at release.',
 };
 const FX_TEXT = {
@@ -71,6 +71,7 @@ export class Sim {
     this.tiltBase = 0.45 + 0.3 * r3;
     this.v = { ph: PH.createState(), tiltStab: 1, tiltLat: 0, sysFrozen: 0, biasFrozen: 0, extra: 0, tug: 0, tugT: 0, relExtra: 0, speed: 0, lastF: 0, stab: 0, bounceAmp: 0, touched: false, minF: 1, deepFlag: false, tugCount: 0, speedAt80: 0, maxSpeedPost80: 0, alignFrozen: null };
     this.pf = { scrapeM: 0, forceM: 0, kinkM: 0, hardM: 0, resist: 0 }; // meters
+    this.p4Hint = false;
     this.chk = { crossed: false, centered: false, marker: false, alignOk: false, alignConfirmed: false, rot2: false, secondView: false, secondViewDepth: null };
     this.ev = []; // event log for scoring
     this.flags = { major80: false, rotSetDesc: false, rotErrDesc: null, alignAtConfirm: null, alignFinal: null, pacingEarly: false, pacingWrong: false, pacingLeftOn: false, partialDeepRecapture: 0, fullRecapture: 0, partialHighRecapture: 0, tugs: 0, wheelWrong: 0, nosecWheelTry: 0, macroWrong: 0, wireNotHeld: 0, preAngio: false, iliacAngioEnd: false, aortogram: false, wireRemoved: false, preclose: 0, hemostasis: false, closureFail: 0, stabLow: false, unlockAt: null, finalDepthNcc: null, finalDepthLcc: null, finalAlign: null, pvl: null, coronary: null, pacingUsed: 'off', releasedFast: false, phase8Closed: false, prematureFast: false };
@@ -93,6 +94,8 @@ export class Sim {
   setCoach() {
     let c = COACH[this.phase];
     if (this.phase === 6) c = this.chk.secondView ? 'Both sides and the posts are confirmed in the 3-cusp view. Now press UNLOCK (the orange button, the lock on the handle, or the U key), then turn the deployment wheel CLOCKWISE slowly to 100%.' : COACH[6] + ' When it is confirmed, press UNLOCK (U) to carry on. Passing 80% without this check is a MAJOR miss.';
+    if (this.phase === 4 && this.p4Ready()) c = COACH[4] + ' Crossed, centred and on the plane: confirm the commissure alignment (recommended). You may also continue without it (press Skip alignment check, or just start the wheel): that is a scored miss on the alignment row.';
+    if (this.phase === 5 && this.flags.alignSkipped) c = COACH[5] + ' NOTE: you skipped the alignment re-check at the annulus - scored as a miss.';
     if (this.phase === 7) c = 'Unlocked - past the point of no return. Finish slowly: turn the deployment wheel clockwise (or hold Deploy slow, or drag the slider) up to 100%. Rapid pacing for the final release only if the case card says so. Speed after 80% still matters.';
     this.coach = c;
   }
@@ -116,7 +119,7 @@ export class Sim {
     nudgeCarm: (dl, dc) => { this.carm.tLao = clamp(this.carm.tLao + dl, -60, 60); this.carm.tCra = clamp(this.carm.tCra + dc, -40, 40); },
     setCarm: (lao, cra, snap = true) => { this.carm.tLao = clamp(lao, -60, 60); this.carm.tCra = clamp(cra, -40, 40); if (snap) { this.carm.lao = this.carm.tLao; this.carm.cra = this.carm.tCra; } },
     rotateStep: (deg) => { this.rotate(deg); },
-    microStep: (mm) => { this.micro(mm); },
+    microStep: (mm) => this.micro(mm), // negative = fine recapture
     flexSet: (x) => { if (!this.fx) this.dev.flex = clamp(x, 0, 1); },
     wheel: (df) => this.wheel(df),
     wheelMm: (mm) => this.wheel(PH.fractionFromMm(mm)), // capsule retraction in mm (+ deploy)
@@ -131,6 +134,7 @@ export class Sim {
     tug: () => this.tug(),
     confirmRotation: () => this.confirmRotation(),
     confirmAlign: () => this.confirmAlign(),
+    skipAlign: () => this.proceedToLanding(),
     confirmSecondView: () => this.confirmSecondView(),
     macroTry: () => this.macroTry(),
     aortogram: (where) => this.aortogram(where),
@@ -143,11 +147,27 @@ export class Sim {
   rotate(deg) { // discrete rotation (used by tests and key taps)
     if (this.fx) return; const dt = 0.05; const rate = deg / dt; this.rotRate = 25; this.applyRotation(rate, dt, true); this.rotRate = 0; this.dev.twist *= 0.5;
   }
+  // MICRO wheel: fine control for RECAPTURE only (resheathing inside the white, recapturable zone).
+  // mm < 0 = fine resheath (capsule moves forward over the valve); mm > 0 only walks back toward where the recapture started.
+  // It never deploys the valve forward, never closes the nosecone and never moves the whole system.
   micro(mm) {
-    if (this.fx || this.phase < 4 || this.phase > 8) return;
-    if (this.phase >= 5 && this.phase <= 7 && this.dev.f > 0.55) { this.say('Valve is engaged - do not move the system now. Use pressure and wire tension.', 3); return; }
-    if (this.phase === 8 && this.dev.f >= 1 && this.dev.macro < 1) { /* fine adjust ok */ }
-    this.moveS(mm, 0.05, true);
+    if (!mm || this.fx) return false;
+    const d = this.dev, v = this.v, ph = this.phase;
+    const refuse = (t) => { this.flags.microWrong = (this.flags.microWrong || 0) + 1; this.say(t, 5); return false; };
+    if (ph === 8) return refuse('Micro wheel is for fine recapture only. It never closes the nosecone - use the MACRO slide.');
+    if (ph === 7 || d.released) return refuse('Micro wheel is for fine recapture only, and you are past the lock: no recapture now. Finish with the deployment wheel.');
+    if (ph < 5 || ph > 6) return refuse('Micro wheel is for fine recapture only - it works while resheathing the valve before the 80% lock.');
+    if (d.f <= 0.02) return refuse('Micro wheel is for fine recapture only. Nothing to recapture yet - deploy first with the deployment wheel.');
+    if (mm < 0) { // fine resheath (also from the 80% lock, which is still recapturable)
+      const ok = this.wheel(-PH.fractionFromMm(-mm));
+      if (ok) this.say('Micro wheel: fine recapture. Resistance builds toward the lock - watch the feel gauge.', 3);
+      return ok;
+    }
+    // + : only undo part of a fine recapture, never beyond the point where the recapture began
+    const cap = Math.min(v.recapFrom ?? 0, 0.79);
+    if (!v.resheathing || d.f >= cap - 1e-6) return refuse('Micro wheel is for fine recapture only: it cannot deploy the valve. Use the deployment wheel (slowly) to go forward.');
+    d.f = Math.min(cap, d.f + PH.fractionFromMm(mm));
+    return true;
   }
   setPacing(m) {
     const prev = this.pacing; this.pacing = m;
@@ -170,6 +190,7 @@ export class Sim {
   wheel(df) { // df = change of deployment fraction requested by the wheel (+ deploy, - resheath)
     if (this.fx || !df) return false;
     const d = this.dev, v = this.v;
+    if (this.phase === 4 && df > 0 && this.p4Ready()) { this.proceedToLanding(); }
     if (this.phase < 5) { this.say('Not yet: unsheathing is only allowed in phases 5-7.', 3); this.flags.wheelWrong++; return false; }
     if (this.phase === 8 || this.phase === 9) { this.flags.nosecWheelTry++; this.say('The deployment wheel never recaptures the nosecone. Use the macro slide to close the tip.', 5); this.log('wheelForNose'); return false; }
     if (df > 0) {
@@ -193,7 +214,7 @@ export class Sim {
       if (d.f > 0.8 + 1e-6) { this.say('Past the point of no return (gray zone) - the valve cannot be recaptured.', 4); return false; }
       if (d.released) return false;
       // resheath
-      if (d.f > 0.02 && !v.resheathing) { v.resheathing = true; v.deepAtResheath = this.depthNow() > 4.6; v.minF = d.f; this.flags.recapAttempts = (this.flags.recapAttempts || 0) + 1; }
+      if (d.f > 0.02 && !v.resheathing) { v.resheathing = true; v.recapFrom = d.f; v.deepAtResheath = this.depthNow() > 4.6; v.minF = d.f; this.flags.recapAttempts = (this.flags.recapAttempts || 0) + 1; }
       d.f = Math.max(0, d.f + df); v.minF = Math.min(v.minF, d.f);
       if (d.locked) { d.locked = false; d.lockArmed = true; this.setCoach(); }
       if (d.f < 0.74) d.lockArmed = true; // hysteresis: a small backwards wobble after Unlock must not re-engage the lock
@@ -225,6 +246,21 @@ export class Sim {
     this.log('rotConfirmed', { err: +e.toFixed(1) });
     this.say('Rotation set before the arch. It can drift in the arch - re-check it at the annulus.', 6);
     this.setPhase(3);
+  }
+  p4Ready() { const c = this.chk; return c.crossed && c.centered && c.marker; }
+  // Phase 4 -> 5 without the commissure-alignment confirmation: allowed, but scored as a miss on the alignment row.
+  proceedToLanding() {
+    if (this.phase !== 4) { this.say('Nothing to skip: this continues from phase 4 (cross and centre) to the landing.', 3); return false; }
+    const c = this.chk;
+    if (!c.crossed) { this.say('Cross the valve first.', 3); return false; }
+    if (!c.centered) { this.say('Centre the shaft in the ascending aorta before moving on.', 4); return false; }
+    if (!c.marker) { this.say('Put the inner-shaft marker on the annular plane before moving on.', 4); return false; }
+    if (!c.alignConfirmed) {
+      this.flags.alignSkipped = true; this.log('alignSkipped');
+      this.setPhase(5);
+      this.say('Alignment was not re-checked at the annulus after the arch - scored as a miss on the commissural alignment row. Continuing to the landing.', 9);
+    } else this.setPhase(5);
+    return true;
   }
   confirmAlign() {
     if (this.phase !== 4) { this.say('Commissure alignment is re-checked at the annulus in phase 4.', 3); return; }
@@ -330,12 +366,11 @@ export class Sim {
     if (!this.wire.removed && this.wire.hold) m = Math.min(m, this.wire.s - 14);
     return m;
   }
-  moveS(ds, dt, micro = false) {
+  moveS(ds, dt) {
     const d = this.dev, lm = this.lm, ph = this.phase;
     if (!ds || this.fx) return;
     if (ph >= 5 && ph <= 7 && d.f > 0.55) return;
     if (ph === 9) return;
-    if (ph >= 5 && ph <= 7 && d.f > 0.02 && !micro) { /* allowed below 55% */ }
     if (ph === 8 && d.macro > 0 && d.macro < 1 && ds < 0) { this.say('Finish closing the nosecone first.', 3); return; }
     let ns = d.s + ds;
     const mx = this.maxS();
@@ -450,7 +485,7 @@ export class Sim {
     if (I.rot) rot = I.rot * (I.rotFast ? 90 : 25);
     if (I.twirl && I.adv) rot = (this.phase === 8 ? -1 : 1) * 25;
     this.rotRate = rot;
-    if (I.microHold) this.micro(I.microHold * 2.5 * dt);
+    if (I.microHold) this.micro(I.microHold * 1.8 * dt);
     // flex
     if (I.flex) d.flex = clamp(d.flex + I.flex * 0.6 * dt, 0, 1);
     // wire
@@ -576,6 +611,7 @@ export class Sim {
       c.centered = Math.abs(d.lat) <= 2.0 && d.s > lm.ann - 30;
       c.marker = Math.abs(this.sysZ()) <= 1.5 && c.crossed;
       if (c.crossed && c.centered && c.marker && c.alignConfirmed) { this.log('p4done'); this.setPhase(5); }
+      else if (c.crossed && c.centered && c.marker && !this.p4Hint) { this.p4Hint = true; this.setCoach(); this.say('Crossed, centred and on the annular plane. Re-check the commissure alignment now (cusp-overlap view) - or continue without it and take a scored miss.', 7); }
     }
     if (ph === 5 && d.locked) { this.chk.secondView = false; this.setPhase(6); }
     if (ph === 6 && !d.locked && d.f < 0.78) { this.setPhase(5); this.chk.secondView = false; this.say('Back to landing - recaptured below 80%.', 4); }

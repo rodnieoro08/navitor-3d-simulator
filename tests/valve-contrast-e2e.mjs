@@ -1,5 +1,5 @@
 // Tests + screenshots for (A) "Inject contrast (pigtail)" and (B) the redesigned Navitor-style valve.
-import { launch } from '../pw.mjs';
+import { launch } from './pw.mjs';
 const prof = process.argv[2] || 'desktop'; const mobile = prof === 'phone';
 let pass = 0, bad = 0; const fails = [];
 const ok = (c, m) => { if (c) pass++; else { bad++; fails.push(m); } console.log((c ? '  ok   ' : '  FAIL ') + m); };

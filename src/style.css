@@ -103,3 +103,5 @@ button.attn{animation:pulse 1.1s ease-in-out infinite;background:#c9792b;border-
 #bInject{min-height:38px;font-weight:700;background:#14507a;border-color:#4db3ff;color:#fff;padding:4px 14px;flex:none}
 #bInject.flash{background:#1f7fc0}#bInject:disabled{background:#16233d;border-color:#2a3d60;color:#7f93b4}
 @media (max-width:900px){#bInject{flex:1 1 100px;min-height:44px;font-size:13px;padding:2px 5px}#bInject .pt{display:none}}
+
+.hbtns button.dim{opacity:.6}#hsvg .dim{opacity:.55}.speed{line-height:1.3;overflow-wrap:anywhere}.hside{min-width:0}
