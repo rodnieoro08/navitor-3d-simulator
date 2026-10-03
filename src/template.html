@@ -33,7 +33,7 @@
       <div class="hdrctl">
         <div class="seg" id="segMode"><button data-mode="fluoro" class="on">Fluoro</button><button data-mode="anat">Anatomy</button></div>
         <div class="seg" id="segLock"><button data-lock="1" class="on">Locked C-arm</button><button data-lock="0">Free orbit</button></div>
-        <button id="btnOverlay" class="sm" title="Hide / show all overlays">Overlays: on</button>
+        <button id="btnOverlay" class="sm" title="Overlays menu" aria-haspopup="dialog" aria-expanded="false">Overlays: on &#9662;</button>
         <button id="btnSettings" class="sm" title="Case card and settings">Settings</button>
         <button id="btnReset" class="sm warn" title="Restart the case">Reset</button>
       </div>
@@ -51,13 +51,14 @@
       <div id="fxbanner" hidden></div></section>
     <section id="tdPanel" class="panel"><canvas id="td"></canvas>
       <div id="legend"></div><div id="partinfo"></div>
-      <button id="btnCut" class="sm cut">Cutaway: off</button></section>
+      <div class="tdbtns"><button id="btnLabels" class="sm on" title="Show / hide the part labels" aria-pressed="true">Labels: on</button><button id="btnCut" class="sm cut">Cutaway: off</button></div></section>
     <section id="ctrl"><div id="ctabs"></div><div id="ccards"></div></section>
       <section id="handlePanel" class="panel"><div id="handleBox"></div></section>
 </main>
   <footer id="foot">Unofficial training model &middot; Not an Abbott product &middot; Not the Navitor IFU &middot; Not medical advice</footer>
 </div>
 
+<div id="ovMenu" role="dialog" aria-label="Overlays" hidden></div>
 <div id="scoreModal" class="modal" hidden><div class="sheet" id="sheet"></div></div>
 <div id="settingsModal" class="modal" hidden><div class="sheet" id="settingsSheet"></div></div>
 <script>/*JS*/</script>

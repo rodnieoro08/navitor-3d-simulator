@@ -12,11 +12,27 @@ ok((await st()).phase === 4, 'phase 4 reached');
 const skip = page.getByRole('button', { name: /Skip alignment check/ });
 ok(await skip.isVisible(), 'a "Skip alignment check" button is offered next to "Confirm commissure alignment"');
 ok(await page.getByRole('button', { name: /Confirm commissure alignment/ }).isVisible(), 'the confirm button is still there');
-await skip.click(); await page.waitForTimeout(300);
-let s = await st(); ok(s.phase === 4 && /Cross the valve/.test(s.note), 'skip is refused before crossing: "' + s.note + '"');
-await page.evaluate(() => { __drv.goCross(); }); await page.waitForTimeout(500);
-await page.evaluate(() => { __sim.sim.dev.s += 6; }); await page.waitForTimeout(400); await skip.click(); await page.waitForTimeout(300);
-s = await st(); ok(s.phase === 4 && /annular plane/.test(s.note), 'skip does not bypass the annular-plane gate: "' + s.note + '"');
+// ---- Skip with NOTHING satisfied (not crossed, not centred, no marker, no alignment): one click goes straight to phase 5
+await page.screenshot({ path: `shots/v4/${prof}-phase4-skip-nothing-before.png` });
+await skip.click(); await page.waitForTimeout(400);
+let s = await st(); ok(s.phase === 5, 'Skip with nothing satisfied: ONE click -> phase 5 immediately');
+ok(s.flags.alignSkipped && s.flags.skipNoCross, 'misses recorded: alignment not re-checked + valve not crossed');
+let cb = (await page.innerText('#coachbar')).replace(/\s+/g, ' '); ok(/not crossed/i.test(cb) && /scored as a miss/i.test(cb), 'coach line names what was skipped: "' + cb.slice(0, 200) + '"');
+ok(/skipped .*crossing the valve/i.test(cb) && /locked out/i.test(cb), 'phase 5 coach explains what to fix');
+await page.screenshot({ path: `shots/v4/${prof}-phase5-after-skip-nothing.png` });
+// phase 5 gates stay: the wheel refuses and says why
+await page.evaluate(() => { __sim.setAngles(-30, -30); __sim.sim.act.wheel(0.05); });
+s = await st(); ok(s.dev.f === 0 && /not across the annulus/i.test(s.note), 'unsheathing refused in phase 5: "' + s.note + '"');
+await page.evaluate(() => { __sim.setAngles(32, 30); __sim.sim.act.wheel(0.05); }); s = await st(); ok(s.dev.f === 0 && /cusp-overlap/i.test(s.note), 'edge-on / cusp-overlap gate still applies: "' + s.note + '"');
+// the proctor rows carry the misses at the end
+await page.evaluate(() => { __sim.setAngles(-30, -30); __drv.goCross(); __drv.press(); __drv.toLock(); __drv.secondView(); __drv.release('fast'); __drv.phase8(); __drv.phase9(); }); await page.waitForTimeout(500);
+const rows = await page.evaluate(() => Object.fromEntries(__sim.sim.score.rows.filter(r => ['nose', 'align'].includes(r.id)).map(r => [r.id, [r.pass, r.feedback]])));
+ok(rows.nose && !rows.nose[0] && /pressed Skip before the valve had crossed/i.test(rows.nose[1]), 'nosecone/path row = scored miss with the proctor sentence');
+ok(rows.align && !rows.align[0], 'alignment row = scored miss');
+// ---- fresh case: the original walk-through (crossed, centred, on the plane, alignment skipped)
+await page.evaluate(() => __sim.reset()); await page.waitForTimeout(400);
+await page.evaluate(() => { __drv.goPhase1(); __drv.goDesc(); __drv.setRotation(); __drv.goArch(); __sim.setAngles(-30, -30); }); await page.waitForTimeout(500);
+ok((await st()).phase === 4, 'fresh case: phase 4 again');
 await page.evaluate(() => { __drv.goCross(); }); await page.waitForTimeout(500);
 s = await st(); ok(s.phase === 4 && s.chk.crossed && s.chk.centered && s.chk.marker && !s.chk.alignConfirmed, 'crossed + centred + marker, alignment unconfirmed: still phase 4 (offered, not forced)');
 ok(/scored miss/i.test(await page.innerText('#coachbar')), 'coach bar explains the scored-miss option');

@@ -64,7 +64,7 @@ console.log('== phase 4 ==');
 { const s = fresh(); to(s, 4); D.goCross(); s.act.setCarm(-30, -30); s.act.rotateStep(-s.alignErr()); s.dev.s += 6; s.act.confirmAlign(); up(s, 0.3); ok(s.phase === 4, 'not centred on the annular plane -> phase 5 withheld'); }
 
 console.log('== phase 4: alignment confirmation no longer blocks the gate ==');
-{ const s = fresh(); to(s, 4); ok(s.act.skipAlign() === false && s.phase === 4 && /Cross the valve/.test(s.note), 'skip refused before crossing: "' + s.note + '"');
+{ const s = fresh(); to(s, 4); ok(s.phase === 4 && !s.chk.crossed, 'phase 4 entered, valve not crossed yet');
   D.goCross(); s.act.setCarm(-30, -30); up(s, 0.3); ok(s.phase === 4 && !s.chk.alignConfirmed && s.chk.crossed && s.chk.centered && s.chk.marker, 'crossed + centred + marker, alignment NOT confirmed: stays in phase 4 until the learner proceeds');
   ok(/alignment/i.test(s.coach) && /scored miss/i.test(s.coach), 'phase 4 coach explains the option: "' + s.coach.slice(-150) + '"');
   s.act.skipAlign(); ok(s.phase === 5 && s.flags.alignSkipped && !s.chk.alignConfirmed, 'Skip alignment check -> phase 5, flagged');
@@ -73,7 +73,22 @@ console.log('== phase 4: alignment confirmation no longer blocks the gate ==');
 { const s = fresh(); to(s, 4); D.goCross(); s.act.setCarm(-30, -30); s.act.rotateStep(-s.alignErr()); s.act.skipAlign(); ok(s.phase === 5, 'skip also works with the posts aligned');
   D.press(); D.toLock(); D.secondView(); D.release('fast'); D.phase8(); D.phase9(); const sh = s.score; const r = sh.rows.find(x => x.id === 'align');
   ok(r && !r.pass && /not re-checked at the annulus after the arch/i.test(r.feedback), 'align row is a scored miss with the proctor line: "' + (r && r.feedback.slice(0, 90)) + '"'); ok(!sh.rows.filter(x => x.id !== 'align').some(x => !x.pass && x.major), 'no other row is affected by the skip'); }
-{ const s = fresh(); to(s, 4); D.goCross(); s.act.setCarm(-30, -30); s.dev.s += 6; up(s, 0.3); ok(s.act.skipAlign() === false && s.phase === 4, 'skip does NOT bypass the marker/plane gate: "' + s.note + '"'); s.act.wheel(0.05); ok(s.phase === 4 && s.dev.f === 0, 'wheel does not start in phase 4 when the plane gate fails'); }
+{ const s = fresh(); to(s, 4); D.goCross(); s.act.setCarm(-30, -30); s.dev.s += 6; up(s, 0.3); ok(s.act.skipAlign() === true && s.phase === 5 && s.flags.skipNoMarker && !s.flags.skipNoCross, 'skip with the marker off the plane now proceeds at once, flagged (marker): "' + s.note + '"'); }
+{ const s = fresh(); to(s, 4); s.act.wheel(0.05); ok(s.phase === 4 && s.dev.f === 0, 'wheel still does not start phase 4 -> 5 unless every gate is met'); }
+console.log('== phase 4: Skip always proceeds immediately ==');
+{ const s = fresh(); to(s, 4); ok(!s.chk.crossed && !s.chk.centered && !s.chk.marker && !s.chk.alignConfirmed, 'nothing in phase 4 is satisfied');
+  ok(s.act.skipAlign() === true && s.phase === 5, 'one click on Skip -> phase 5 immediately');
+  ok(s.flags.alignSkipped && s.flags.skipNoCross && !s.flags.skipNoCentre && !s.flags.skipNoMarker, 'flags: alignment + crossing recorded (centring/marker not judged before the crossing)');
+  ok(/not crossed/i.test(s.note) && /alignment/i.test(s.note) && /scored as a miss/i.test(s.note), 'coach line names what was skipped: "' + s.note + '"');
+  ok(/skipped .*crossing the valve/i.test(s.coach) && /locked out/i.test(s.coach), 'phase 5 coach explains what to fix');
+  s.act.setCarm(-30, -30); s.act.wheel(0.05); ok(s.dev.f === 0 && /not across the annulus/i.test(s.note), 'phase 5 gates stay: wheel refuses, coach explains: "' + s.note + '"');
+  s.act.setCarm(-30, -30); D.goCross(); up(s, 0.3); D.press(); D.toLock(); D.secondView(); D.release('fast'); D.phase8(); D.phase9(); ok(s.finished, 'the case can still be finished after fixing the position in phase 5');
+  const nose = s.score.rows.find(x => x.id === 'nose'), al = s.score.rows.find(x => x.id === 'align');
+  ok(nose && !nose.pass && /pressed Skip before the valve had crossed/i.test(nose.feedback), 'nosecone/path row is a scored miss with a proctor sentence: "' + (nose && nose.feedback.slice(0, 100)) + '"');
+  ok(al && !al.pass && /not re-checked at the annulus/i.test(al.feedback), 'alignment row is a scored miss'); }
+{ const s = fresh(); to(s, 4); D.goCross(); s.act.setCarm(-30, -30); s.dev.lat = 0; s.dev.flex = 0.9; up(s, 0.3); ok(!s.chk.centered || true, 'setup'); const before = s.chk.centered; s.act.skipAlign(); ok(s.phase === 5, 'skip when crossed but not centred -> phase 5' + (before ? ' (was centred)' : '')); }
+{ const s = fresh(); to(s, 4); D.goCross(); s.act.setCarm(-30, -30); up(s, 0.3); s.act.skipAlign(); ok(s.phase === 5 && s.flags.alignSkipped && !s.flags.skipNoCross && !s.flags.skipNoCentre && !s.flags.skipNoMarker, 'skip with crossed + centred + marker: only the alignment miss'); }
+{ const s = fresh(); to(s, 4); ok(s.act.skipAlign() === true && s.act.skipAlign() === false && s.phase === 5, 'a second click in phase 5 does nothing'); }
 { const s = fresh(); to(s, 4); D.goCross(); s.act.setCarm(-30, -30); up(s, 0.3); s.act.wheel(0.02); up(s, 0.1); ok(s.phase === 5 && s.flags.alignSkipped, 'starting the deployment wheel with every other gate met also continues (skipped alignment is flagged)'); }
 { const s = fresh(); to(s, 4); D.goCross(); s.act.setCarm(-30, -30); s.act.rotateStep(-s.alignErr()); s.act.confirmAlign(); up(s, 0.2); ok(s.phase === 5 && !s.flags.alignSkipped, 'confirming still advances normally, no flag'); }
 console.log('== phase 5/6 ==');
@@ -178,4 +193,16 @@ console.log('== contrast injection / unlock / slider ==');
 { // same case with and without extra injections: identical score rows
   const run = (inj) => { const s = fresh(); D.goPhase1(); D.goDesc(); D.setRotation(); D.goArch(); D.goCross(); D.alignAt(); s.act.setCarm(-30, -30); D.press(); if (inj) s.act.inject(); D.toLock(); if (inj) s.act.inject(); D.secondView(); D.release('fast'); if (inj) s.act.inject(); D.phase8(); if (!inj) s.act.aortogram('root'); D.phase9(); return s.score.rows.map(r => r.pass + ':' + r.result).join('|'); };
   ok(run(true) === run(false), 'injections do not change any score row'); }
+{ // tap-to-step (+/-2 mm): same physics, lock and speed rules as the wheel
+  const s = fresh(); D.goPhase1(); D.goDesc(); D.setRotation(); D.goArch(); D.goCross(); D.alignAt(); s.act.setCarm(-30, -30); D.press();
+  ok(s.phase === 5, 'step test: phase 5');
+  let mx = 0; const run = (sec) => { for (let i = 0; i < sec * 30; i++) { s.update(dt); mx = Math.max(mx, s.v.speed); } };
+  s.act.stepMm(2); run(3); ok(Math.abs(s.dev.retractMm - 2) < 0.05, 'stepMm(+2) retracts exactly 2 mm (' + s.dev.retractMm.toFixed(3) + ')'); ok(mx <= 0.085, 'a step never exceeds the safe wheel speed (' + mx.toFixed(3) + ' of travel/s)');
+  s.act.stepMm(2); s.act.stepMm(2); run(5); ok(Math.abs(s.dev.retractMm - 6) < 0.05, 'three steps queue up to 6 mm (' + s.dev.retractMm.toFixed(2) + ')');
+  s.act.stepMm(-2); run(3); ok(Math.abs(s.dev.retractMm - 4) < 0.05, 'stepMm(-2) resheaths 2 mm (' + s.dev.retractMm.toFixed(2) + ')');
+  s.act.stepMm(-50); run(5); ok(s.dev.f === 0, 'stepping below 0 stops at fully sheathed');
+  s.input = { sliderTarget: 0.78 }; run(30); s.act.stepMm(2); run(4); ok(s.dev.locked && Math.abs(s.dev.f - 0.8) < 0.003, 'a step stops at the 80% lock (f=' + s.dev.f.toFixed(3) + ', locked ' + s.dev.locked + ')');
+  const f0 = s.dev.f; s.act.stepMm(2); run(3); ok(Math.abs(s.dev.f - f0) < 1e-6, 'at the lock a step does nothing until Unlock');
+  const s2 = fresh(); s2.act.stepMm(2); for (let i = 0; i < 90; i++) s2.update(dt); ok(s2.dev.f === 0, 'before phase 5 a step is refused (the wheel gate applies)');
+}
 console.log(`\n${pass} passed, ${fail} failed`); out.forEach(o => console.log(o)); process.exit(fail ? 1 : 0);

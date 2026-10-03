@@ -95,7 +95,7 @@ export class Sim {
     let c = COACH[this.phase];
     if (this.phase === 6) c = this.chk.secondView ? 'Both sides and the posts are confirmed in the 3-cusp view. Now press UNLOCK (the orange button, the lock on the handle, or the U key), then turn the deployment wheel CLOCKWISE slowly to 100%.' : COACH[6] + ' When it is confirmed, press UNLOCK (U) to carry on. Passing 80% without this check is a MAJOR miss.';
     if (this.phase === 4 && this.p4Ready()) c = COACH[4] + ' Crossed, centred and on the plane: confirm the commissure alignment (recommended). You may also continue without it (press Skip alignment check, or just start the wheel): that is a scored miss on the alignment row.';
-    if (this.phase === 5 && this.flags.alignSkipped) c = COACH[5] + ' NOTE: you skipped the alignment re-check at the annulus - scored as a miss.';
+    if (this.phase === 5 && (this.flags.alignSkipped || this.flags.skipNoCross || this.flags.skipNoCentre || this.flags.skipNoMarker)) { const m = []; if (this.flags.alignSkipped) m.push('the alignment re-check at the annulus'); if (this.flags.skipNoCross) m.push('crossing the valve'); if (this.flags.skipNoCentre) m.push('centring the shaft'); if (this.flags.skipNoMarker) m.push('putting the marker on the annular plane'); c = COACH[5] + ' NOTE: you skipped ' + m.join(', ') + ' - scored as a miss.' + ((this.flags.skipNoCross || this.flags.skipNoCentre || this.flags.skipNoMarker) ? ' Unsheathing stays locked out until the valve is crossed, centred and the inner-shaft marker is on the annular plane (and the view is cusp overlap).' : ''); }
     if (this.phase === 7) c = 'Unlocked - past the point of no return. Finish slowly: turn the deployment wheel clockwise (or hold Deploy slow, or drag the slider) up to 100%. Rapid pacing for the final release only if the case card says so. Speed after 80% still matters.';
     this.coach = c;
   }
@@ -124,6 +124,8 @@ export class Sim {
     wheel: (df) => this.wheel(df),
     wheelMm: (mm) => this.wheel(PH.fractionFromMm(mm)), // capsule retraction in mm (+ deploy)
     wheelTurns: (t) => this.wheel(PH.fractionFromMm(PH.mmFromTurns(t))), // wheel turns (clockwise +)
+    // tap-to-step: the capsule glides to (target + mm) at the safe wheel speed through wheel(), so the lock, phase gates and speed rules all apply
+    stepMm: (mm) => { const I = this.input; const base = I.sliderTarget != null ? I.sliderTarget : this.dev.f; this.flags.tapSteps = (this.flags.tapSteps || 0) + 1; I.sliderTarget = clamp(base + PH.fractionFromMm(mm), 0, 1); this.stepExact = true; },
     unlock: () => this.unlock(),
     lockToggle: () => { if (this.dev.locked) this.unlock(); else this.say('The deployment lock engages by itself at 80%.'); },
     toggleHold: () => { this.wire.hold = !this.wire.hold; this.say(this.wire.hold ? 'Wire fixed - good.' : 'Wire is free: it will travel with the system.', 3); },
@@ -203,6 +205,7 @@ export class Sim {
       if (d.f <= 0.02) { // starting
         const vi = this.viewInfo();
         if (!vi.cuspOverlap) { this.say('Kill parallax first, in the cusp-overlap view (NCC alone on the left).', 4); return false; }
+        if (this.sysZ() < -2.6) { this.say('The valve is not across the annulus yet: advance over the wire until the inner-shaft marker is on the annular plane, then unsheathe.', 5); return false; }
         if (Math.abs(this.sysZ()) > 2.6 || Math.abs(d.lat) > 2.6) { this.say('Re-centre the shaft and put the inner-shaft marker back on the annular plane before unsheathing.', 4); return false; }
         if (!this.wire.hold) { this.say('Fix the wire first.', 3); return false; }
         if (!v.alignFrozen) v.alignFrozen = null;
@@ -248,18 +251,21 @@ export class Sim {
     this.setPhase(3);
   }
   p4Ready() { const c = this.chk; return c.crossed && c.centered && c.marker; }
-  // Phase 4 -> 5 without the commissure-alignment confirmation: allowed, but scored as a miss on the alignment row.
+  // Phase 4 -> 5 on the "Skip alignment check" button: ALWAYS proceeds (even if nothing else in phase 4 is satisfied). Whatever was skipped is
+  // recorded as a scored miss (alignment, crossing, centring, marker on the plane) and explained by a coach line. Phase 5 keeps its own gates.
   proceedToLanding() {
     if (this.phase !== 4) { this.say('Nothing to skip: this continues from phase 4 (cross and centre) to the landing.', 3); return false; }
-    const c = this.chk;
-    if (!c.crossed) { this.say('Cross the valve first.', 3); return false; }
-    if (!c.centered) { this.say('Centre the shaft in the ascending aorta before moving on.', 4); return false; }
-    if (!c.marker) { this.say('Put the inner-shaft marker on the annular plane before moving on.', 4); return false; }
-    if (!c.alignConfirmed) {
-      this.flags.alignSkipped = true; this.log('alignSkipped');
-      this.setPhase(5);
-      this.say('Alignment was not re-checked at the annulus after the arch - scored as a miss on the commissural alignment row. Continuing to the landing.', 9);
-    } else this.setPhase(5);
+    const c = this.chk, F = this.flags, miss = [], fix = [];
+    if (!c.alignConfirmed) { F.alignSkipped = true; miss.push('the commissural alignment was not re-checked at the annulus'); }
+    if (!c.crossed) { F.skipNoCross = true; miss.push('the valve was not crossed'); fix.push('advance over the wire until the inner-shaft marker is on the annular plane'); }
+    else {
+      if (!c.centered) { F.skipNoCentre = true; miss.push('the shaft was not centred'); fix.push('re-centre the shaft in the ascending aorta'); }
+      if (!c.marker) { F.skipNoMarker = true; miss.push('the inner-shaft marker was not on the annular plane'); fix.push('put the inner-shaft marker back on the annular plane'); }
+    }
+    this.log('phase4Skipped', { align: !c.alignConfirmed, crossed: !!c.crossed, centred: !!c.centered, marker: !!c.marker });
+    this.setPhase(5);
+    const list = miss.length ? miss.join('; ') : 'nothing was missed';
+    this.say(`Skipped to the landing: ${list} - scored as a miss.` + (fix.length ? ` Before you unsheathe, ${fix.join(', and ')}; the wheel stays locked out until then.` : ' Continuing to the landing.'), 10);
     return true;
   }
   confirmAlign() {
@@ -502,7 +508,7 @@ export class Sim {
     d.drift = this.driftTotal * smooth(lm.archStart + 30, lm.ascTop + 60, d.s);
     // deployment / macro held inputs
     if (I.deploy) { const rate = I.deployFast ? 0.2 : (I.deployMed ? 0.07 : 0.035); this.wheel(I.deploy * rate * dt); }
-    if (I.sliderTarget != null) { const tg = I.sliderTarget >= 0.995 ? 1 : I.sliderTarget <= 0.005 ? 0 : I.sliderTarget; const diff = tg - d.f; if (Math.abs(diff) < (tg === 1 || tg === 0 ? 1e-6 : 0.004)) I.sliderTarget = null; else if (!this.wheel(clamp(diff, -0.035 * dt, 0.035 * dt))) I.sliderTarget = null; }
+    if (I.sliderTarget != null) { const tg = I.sliderTarget >= 0.995 ? 1 : I.sliderTarget <= 0.005 ? 0 : I.sliderTarget; const diff = tg - d.f; if (Math.abs(diff) < (tg === 1 || tg === 0 || this.stepExact ? 1e-6 : 0.004)) { I.sliderTarget = null; this.stepExact = false; } else if (!this.wheel(clamp(diff, -0.035 * dt, 0.035 * dt))) { I.sliderTarget = null; this.stepExact = false; } }
     if (I.macro) this.macroStep(dt);
     // wire tension (phase 5-6) and pressure are just state
     this.updateValve(dt);

@@ -1,4 +1,5 @@
 // Monitor (C-arm orthographic, fluoro post-process or anatomy), 3D panel (perspective / orbit) and the 2D overlay.
+import { loadOverlays } from './overlays.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { D2R, R2D, clamp, lerp, smooth, beamDir, fmtLao, fmtCra, wrap180 } from './util.js';
@@ -29,7 +30,7 @@ export class Views {
   constructor(sim, world, device, dom) {
     this.sim = sim; this.W = world; this.dev = device; this.dom = dom; this.F = world.F; this.P = world.P;
     this.mode = 'fluoro'; this.lock = true; this.cutaway = false;
-    this.overlay = { labels: true, parallax: true, angles: true, guides: true };
+    this.overlay = loadOverlays();
     this.zoom = 1;
     // monitor
     this.rMon = new THREE.WebGLRenderer({ canvas: dom.mon, antialias: true, preserveDrawingBuffer: true });
@@ -168,12 +169,14 @@ export class Views {
       ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(xx - 3, yy - 2, m + 6, hh); ctx.fillStyle = col; ctx.fillText(s, xx, yy); };
     const inRoot = this.rootMode;
     // guides in the root
-    if (O.guides && S.phase >= 4 || (O.guides && S.phase === 9 && inRoot)) {
-      const ring = []; for (let i = 0; i <= 72; i++) ring.push(this.proj(F.pt(i / 72 * 360, R_ANN, 0).add(rd)));
-      ctx.strokeStyle = vi.edgeOn ? 'rgba(255,238,88,0.9)' : 'rgba(255,238,88,0.55)'; ctx.lineWidth = px(1.2); ctx.setLineDash([px(5), px(4)]); ctx.beginPath(); ring.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke(); ctx.setLineDash([]);
+    if (S.phase >= 4 && (O.guides || O.labels)) {
+      if (O.guides) {
+        const ring = []; for (let i = 0; i <= 72; i++) ring.push(this.proj(F.pt(i / 72 * 360, R_ANN, 0).add(rd)));
+        ctx.strokeStyle = vi.edgeOn ? 'rgba(255,238,88,0.9)' : 'rgba(255,238,88,0.55)'; ctx.lineWidth = px(1.2); ctx.setLineDash([px(5), px(4)]); ctx.beginPath(); ring.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke(); ctx.setLineDash([]);
+      }
       const col = { NCC: '#ffb300', RCC: '#43c466', LCC: '#b07cff' };
-      for (const k of ['NCC', 'RCC', 'LCC']) { const p = this.proj(F.pt(F.cuspAz[k], R_ANN, 0).add(rd)); ctx.fillStyle = col[k]; ctx.beginPath(); ctx.arc(p.x, p.y, px(4.5), 0, 7); ctx.fill(); if (O.labels) txt(k, p.x + px(7), p.y + px(2), col[k]); }
-      ctx.fillStyle = '#fff'; for (const k in F.commAz) { const p = this.proj(F.pt(F.commAz[k], R_ANN, 0).add(rd)); ctx.fillRect(p.x - px(1.5), p.y - px(5), px(3), px(10)); }
+      for (const k of ['NCC', 'RCC', 'LCC']) { const p = this.proj(F.pt(F.cuspAz[k], R_ANN, 0).add(rd)); if (O.guides) { ctx.fillStyle = col[k]; ctx.beginPath(); ctx.arc(p.x, p.y, px(4.5), 0, 7); ctx.fill(); } if (O.labels) txt(k, p.x + px(7), p.y + px(2), col[k]); }
+      if (O.guides) { ctx.fillStyle = '#fff'; for (const k in F.commAz) { const p = this.proj(F.pt(F.commAz[k], R_ANN, 0).add(rd)); ctx.fillRect(p.x - px(1.5), p.y - px(5), px(3), px(10)); } }
       // pigtail nadir marker
     }
     // labels for the anatomy (anatomy mode and labels on)
@@ -194,8 +197,8 @@ export class Views {
     }
     // device-aware labels at the root
     if (O.labels && inRoot && S.phase >= 4 && S.phase <= 8 && this.dev.vo) { const q = this.proj(this.dev.vo.clone().add(F.ex.clone().multiplyScalar(14))); txt('Inflow / Vision markers', q.x + px(6), q.y - px(4), '#ff7a8a'); }
-    // guide readouts
-    if (O.guides) {
+    // measurement readouts
+    if (O.measures) {
       let y = px(8); const L = [];
       if (S.phase >= 4 && S.phase <= 7) {
         L.push(`Marker vs annulus: ${S.sysZ().toFixed(1)} mm`);
@@ -220,7 +223,7 @@ export class Views {
     // scale bar
     { const mmPx = h / (2 * this.fov); const L = this.fov > 60 ? 50 : 10; ctx.strokeStyle = '#c7d3e8'; ctx.lineWidth = px(2); ctx.beginPath(); ctx.moveTo(w - px(12) - L * mmPx, h - px(14)); ctx.lineTo(w - px(12), h - px(14)); ctx.stroke(); txt(`${L} mm`, w - px(12), h - px(34), '#c7d3e8', 'right'); }
     // marker pattern inset
-    if (O.guides && (S.phase === 2 || (S.phase >= 4 && S.phase <= 6))) this.drawInset(ctx, w, h, px);
+    if (O.inset && (S.phase === 2 || (S.phase >= 4 && S.phase <= 6))) this.drawInset(ctx, w, h, px);
     // failure halo
     if (S.fx) {
       const p = this.proj(S.path.pos(clamp(S.fx.s, 0, S.path.length)).clone().add(S.fx.type === 'frameCatch' || S.fx.type === 'wireLost' ? new THREE.Vector3() : new THREE.Vector3()));

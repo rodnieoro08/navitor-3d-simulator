@@ -30,7 +30,7 @@ await noHScroll('phase 1');
 await page.click('button[data-mode=anat]'); await page.waitForTimeout(300); ok(await page.evaluate(() => __sim.views.mode) === 'anat', 'Anatomy mode toggle'); await page.click('button[data-mode=fluoro]');
 ok(await page.evaluate(() => __sim.views.mode) === 'fluoro', 'Fluoro mode toggle');
 await page.getByRole('button', { name: 'Free orbit' }).click(); ok(await page.evaluate(() => !__sim.views.lock), 'Free orbit toggle'); await page.getByRole('button', { name: 'Locked C-arm' }).click(); ok(await page.evaluate(() => __sim.views.lock), 'Locked C-arm toggle');
-await page.click('#btnOverlay'); ok(/off/.test(await page.innerText('#btnOverlay')), 'Overlays off (lab look)'); await page.click('#btnOverlay');
+await page.click('#btnOverlay'); await page.click('#ovAllOff'); ok(/off/.test(await page.innerText('#btnOverlay')), 'Overlays off (lab look)'); await page.click('#ovAllOn'); await page.keyboard.press('Escape');
 // ---- C-arm: keyboard (desktop) / pad (phone)
 await page.evaluate(() => __sim.setAngles(0, 0));
 await tab('carm');

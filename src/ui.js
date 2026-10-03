@@ -2,6 +2,7 @@ import { fmtLao, fmtCra, clamp, wrap60 } from './util.js';
 import { PHASES, COACH } from './sim.js';
 import { PARTS } from './device.js';
 import * as PH from './physics.js';
+import { OVERLAYS, saveOverlays } from './overlays.js';
 
 const $ = s => document.querySelector(s);
 const el = (tag, attrs = {}, html = '') => { const e = document.createElement(tag); for (const k in attrs) { if (k === 'class') e.className = attrs[k]; else e.setAttribute(k, attrs[k]); } e.innerHTML = html; return e; };
@@ -9,7 +10,7 @@ const el = (tag, attrs = {}, html = '') => { const e = document.createElement(ta
 export class UI {
   constructor(sim, views, world) {
     this.sim = sim; this.views = views; this.W = world; this.keys = {}; this.cache = {}; this.stepSize = 1;
-    this.buildStepper(); this.buildControls(); this.buildHandle(); this.buildLegend(); this.bindHeader(); this.bindKeys(); this.bindModal();
+    this.buildStepper(); this.buildControls(); this.buildHandle(); this.buildLegend(); this.buildOverlayMenu(); this.bindHeader(); this.bindKeys(); this.bindModal();
     sim.on((ev, data) => this.onSim(ev, data));
     const mq = window.matchMedia('(max-width:900px)'); const upd = () => { $('#app').classList.toggle('mobile', mq.matches); }; mq.addEventListener('change', upd); upd();
     this.setTab('system'); $('#app').dataset.vt = 'mon';
@@ -24,7 +25,8 @@ export class UI {
     const V = this.views;
     $('#segMode').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; V.setMode(b.dataset.mode); [...$('#segMode').children].forEach(c => c.classList.toggle('on', c === b)); });
     $('#segLock').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; V.setLock(b.dataset.lock === '1'); [...$('#segLock').children].forEach(c => c.classList.toggle('on', c === b)); });
-    $('#btnOverlay').addEventListener('click', () => { const o = V.overlay; const any = o.labels || o.parallax || o.angles || o.guides; o.labels = o.parallax = o.angles = o.guides = !any; this.syncOverlayBtn(); });
+    $('#btnOverlay').addEventListener('click', (e) => { e.stopPropagation(); this.toggleOverlayMenu(); });
+    $('#btnLabels').addEventListener('click', () => this.setOverlay('parts', !V.overlay.parts));
     $('#btnSettings').addEventListener('click', () => { this.buildSettings(); $('#settingsModal').hidden = false; });
     $('#btnReset').addEventListener('click', () => { this.sim.reset(true); this.sim.started = true; });
     $('#btnCut').addEventListener('click', () => { V.cutaway = !V.cutaway; $('#btnCut').textContent = 'Cutaway: ' + (V.cutaway ? 'on' : 'off'); $('#btnCut').classList.toggle('on', V.cutaway); });
@@ -32,7 +34,39 @@ export class UI {
     $('#zOut').addEventListener('click', () => { V.zoom = clamp(V.zoom / 1.25, 0.5, 4); });
     $('#viewtabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; $('#app').dataset.vt = b.dataset.vt; [...$('#viewtabs').children].forEach(c => c.classList.toggle('on', c === b)); });
   }
-  syncOverlayBtn() { const o = this.views.overlay; const any = o.labels || o.parallax || o.angles || o.guides; $('#btnOverlay').textContent = 'Overlays: ' + (any ? 'on' : 'off'); }
+  // ---------- overlays (visual only: never read by the simulation, scoring or gating) ----------
+  setOverlay(key, val, persist = true) { this.views.overlay[key] = !!val; if (persist) saveOverlays(this.views.overlay); this.syncOverlayBtn(); }
+  setAllOverlays(val) { for (const o of OVERLAYS) this.views.overlay[o.key] = !!val; saveOverlays(this.views.overlay); this.syncOverlayBtn(); }
+  syncOverlayBtn() {
+    const o = this.views.overlay, any = OVERLAYS.some(d => o[d.key]), n = OVERLAYS.filter(d => o[d.key]).length;
+    $('#btnOverlay').textContent = 'Overlays: ' + (any ? 'on' : 'off') + ' \u25BE'; $('#btnOverlay').title = `${n} of ${OVERLAYS.length} overlays on - open the menu`;
+    const lb = $('#btnLabels'); lb.textContent = 'Labels: ' + (o.parts ? 'on' : 'off'); lb.classList.toggle('on', !!o.parts); lb.setAttribute('aria-pressed', o.parts ? 'true' : 'false');
+    document.querySelectorAll('#ovMenu input[data-ov]').forEach(c => { c.checked = !!o[c.dataset.ov]; });
+    const app = $('#app'); for (const d of OVERLAYS) app.classList.toggle('ov-off-' + d.key, !o[d.key]);
+  }
+  buildOverlayMenu() {
+    const m = $('#ovMenu');
+    m.innerHTML = `<div class="ovhead"><b>Overlays</b><button id="ovClose" class="sm" aria-label="Close overlays menu">Done</button></div>
+    <div class="ovall"><button id="ovAllOn">All on</button><button id="ovAllOff">All off (lab look)</button></div>
+    <div class="ovlist">${OVERLAYS.map(d => `<label class="ovrow" data-row="${d.key}"><span class="ovtxt"><b>${d.label}</b><small>${d.desc}</small></span><input type="checkbox" role="switch" data-ov="${d.key}"><i class="ovsw"></i></label>`).join('')}</div>
+    <p class="ovnote">The coach line is always on. Overlays are display only: they never change scoring or step gating. Your choices are remembered on this device.</p>`;
+    m.querySelectorAll('input[data-ov]').forEach(c => c.addEventListener('change', e => this.setOverlay(c.dataset.ov, e.target.checked)));
+    m.querySelector('#ovAllOn').onclick = () => this.setAllOverlays(true); m.querySelector('#ovAllOff').onclick = () => this.setAllOverlays(false);
+    m.querySelector('#ovClose').onclick = () => this.toggleOverlayMenu(false);
+    document.addEventListener('pointerdown', e => { if (!m.hidden && !m.contains(e.target) && e.target.id !== 'btnOverlay') this.toggleOverlayMenu(false); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && !m.hidden) this.toggleOverlayMenu(false); });
+    window.addEventListener('resize', () => { if (!m.hidden) this.placeOverlayMenu(); });
+    this.syncOverlayBtn();
+  }
+  placeOverlayMenu() {
+    const m = $('#ovMenu'), b = $('#btnOverlay').getBoundingClientRect();
+    if ($('#app').classList.contains('mobile')) { m.style.left = '0'; m.style.right = '0'; m.style.top = 'auto'; m.style.bottom = '0'; m.style.width = ''; return; }
+    const wdt = Math.min(360, window.innerWidth - 12); m.style.width = wdt + 'px'; m.style.bottom = 'auto'; m.style.top = Math.round(b.bottom + 6) + 'px'; m.style.right = 'auto'; m.style.left = Math.max(6, Math.min(window.innerWidth - wdt - 6, Math.round(b.right - wdt))) + 'px';
+  }
+  toggleOverlayMenu(open) {
+    const m = $('#ovMenu'); const show = open === undefined ? m.hidden : open; m.hidden = !show; $('#btnOverlay').setAttribute('aria-expanded', show ? 'true' : 'false');
+    if (show) { this.placeOverlayMenu(); this.syncOverlayBtn(); }
+  }
   bindModal() {
     $('#settingsModal').addEventListener('click', e => { if (e.target.id === 'settingsModal') $('#settingsModal').hidden = true; });
   }
@@ -43,13 +77,11 @@ export class UI {
     <div class="row"><label>Wire stiffness: <select id="cfStiff"><option value="1" ${(S.cfg.wireStiffness ?? 1) === 1 ? 'selected' : ''}>standard (1.0)</option><option value="1.4" ${S.cfg.wireStiffness === 1.4 ? 'selected' : ''}>extra-stiff (1.4)</option></select></label></div>
     <h4>Physics model</h4><p class="fb" style="color:#9fb6d6" id="physNote">${PH.PHYSICS_NOTE} Deployment, foreshortening, friction and pop-up use invented constants chosen only to teach the qualitative behaviour; they are not manufacturer values.</p>
     <details><summary class="ro">Show the ${PH.describeConstants().length} constants (all ${PH.ESTIMATE})</summary><div class="ro" style="font-size:11px;max-height:160px;overflow:auto">${PH.describeConstants().map(c => `<div><b>${c.name}</b> = ${c.value} ${c.unit} - ${c.meaning} <i>[${c.status}]</i></div>`).join('')}</div></details>
-    <h4>Overlays (hide them for the lab look)</h4>
-    <div class="row">${['labels', 'parallax', 'angles', 'guides'].map(k => `<label style="margin-right:10px"><input type="checkbox" data-ov="${k}" ${O[k] ? 'checked' : ''}> ${k}</label>`).join('')}</div>
+    <h4>Overlays</h4><p class="ro" style="font-size:12px">Use the <b>Overlays</b> menu in the header (and the <b>Labels</b> button on the 3D panel) to show or hide labels, readouts, the plan-view inset and the handle status text.</p>
     <h4>Keys</h4><p class="ro" style="font-size:12px">Arrows = C-arm (Shift = 5 deg) | W/S advance/withdraw (Shift fast) | Q/E rotate | F/G flex +/- | X/Z deploy/resheath (Shift fast) | I/K wire advance/pull | H hold wire | M macro slide | U unlock | P pacing | T wire tug | C aortogram</p>
     <div class="row"><button id="stClose" class="primary">Done</button></div>`;
     sh.querySelector('#cfStiff').onchange = e => S.act.setCard({ wireStiffness: parseFloat(e.target.value) });
     sh.querySelector('#cfFast').onchange = e => S.act.setCard({ finalFast: e.target.checked });
-    sh.querySelectorAll('[data-ov]').forEach(c => c.onchange = e => { O[c.dataset.ov] = e.target.checked; this.syncOverlayBtn(); });
     sh.querySelector('#stClose').onclick = () => { $('#settingsModal').hidden = true; };
   }
   // ---------- stepper ----------
@@ -64,6 +96,7 @@ export class UI {
     const up = () => { if (btn.classList.contains('on')) { btn.classList.remove('on'); off(); } };
     btn.addEventListener('pointerdown', down); btn.addEventListener('pointerup', up); btn.addEventListener('pointercancel', up); btn.addEventListener('lostpointercapture', up);
     btn.addEventListener('contextmenu', e => e.preventDefault());
+    btn.addEventListener('touchstart', e => e.preventDefault(), { passive: false }); btn.addEventListener('selectstart', e => e.preventDefault()); btn.addEventListener('dragstart', e => e.preventDefault());
   }
   buildControls() {
     const S = this.sim, tabs = $('#ctabs'), cards = $('#ccards');
@@ -154,7 +187,7 @@ export class UI {
     box.innerHTML = `<svg id="hsvg" viewBox="0 0 440 328" role="img" aria-label="FlexNav handle diagram">
       <text x="14" y="16" fill="#9fb6d6" font-size="11">FlexNav handle (teaching diagram, not to scale)</text>
       <rect x="10" y="26" width="420" height="144" rx="46" fill="#16233b" stroke="#35507f" stroke-width="2"/>
-      <g id="wheel" transform="translate(84 98)" style="cursor:grab"><circle r="56" fill="#0e1a30" stroke="#5b95ff" stroke-width="3"/><g id="wheelRot"></g><circle r="20" fill="#1f3358" stroke="#5b95ff"/><text y="3.5" text-anchor="middle" fill="#cfe3ff" font-size="9.5">DEPLOY</text></g>
+      <g id="wheel" transform="translate(84 98)" style="cursor:grab;touch-action:none"><circle r="72" fill="#000" fill-opacity="0.001" id="wheelHit"/><circle id="wheelRing" r="56" fill="#0e1a30" stroke="#5b95ff" stroke-width="3"/><g id="wheelRot"></g><circle r="20" fill="#1f3358" stroke="#5b95ff"/><text y="3.5" text-anchor="middle" fill="#cfe3ff" font-size="9.5">DEPLOY</text></g>
       <text id="tWheel1" x="84" y="190" text-anchor="middle" fill="#cfe3ff" font-size="10.5">Deployment / resheath wheel</text><text id="tWheel2" x="84" y="207" text-anchor="middle" fill="#9fb6d6" font-size="10">(clockwise = deploy)</text>
       <g id="micro" transform="translate(226 78)" style="cursor:pointer"><circle r="28" fill="#0e1a30" stroke="#ffd24a" stroke-width="2.5"/><g id="microRot"></g><text id="tMicroIn" y="3" text-anchor="middle" fill="#ffe9a8" font-size="9">MICRO</text></g>
       <g id="microBtns"><rect id="muM" x="184" y="118" width="38" height="30" rx="6" fill="#2a2a14" stroke="#ffd24a"/><text x="203" y="138" text-anchor="middle" fill="#ffe9a8" font-size="16" style="pointer-events:none">-</text>
@@ -172,6 +205,10 @@ export class UI {
         <text id="tLockHint" x="288" y="60" text-anchor="middle" fill="#ffd24a" font-size="10.5">80% lock: tap the lock or press Unlock</text></g>
     </svg>
 <div class="hside">
+    <div class="mdep" id="mDep"><div class="mdhead">Deploy by touch: press and hold, or tap for precision</div>
+      <div class="mdrow"><button id="mHoldDep" class="mbig hold">Hold to deploy (slow)</button><button id="mHoldRes" class="mbig hold">Hold to resheath</button></div>
+      <div class="mdrow"><button id="mTapDep" class="mtap">Tap to deploy: +2 mm</button><button id="mTapRes" class="mtap">Tap to resheath: -2 mm</button></div>
+      <div class="mdrow"><button id="mUnlock" class="mbig">Unlock (needed at 80%)</button><div id="mdTxt" class="ro mdstat">deployed 0%</div></div></div>
     <div class="hbtns three"><button id="hRes" class="hold">&#9664; Resheath</button><button id="hDep" class="hold">Deploy slow &#9654;</button><button id="hDepF" class="hold">Deploy fast &#9654;&#9654;</button></div>
     <div class="hbtns"><button id="hMacro" class="hold" style="grid-column:span 2">Macro slide: close nosecone</button><button id="hUnlock">Unlock (U)</button><button id="hMuM" class="hold" title="MICRO wheel: fine recapture only">Micro &minus; (fine recapture)</button><button id="hMuP" class="hold" title="MICRO wheel: fine recapture only">Micro + (undo)</button></div>
         <div class="speed"><span id="spdTxt" class="ro">wheel speed: -</span></div><div class="gauge"><i id="gSpd"></i></div><div class="speed"><span id="fTxt" class="ro">deployed 0%</span></div><div class="speed"><span id="feelTxt" class="ro">recapture feel: free</span></div><div class="gauge"><i id="gFeel"></i></div>
@@ -181,12 +218,26 @@ export class UI {
     wr.innerHTML = wr.innerHTML; // reparse svg
     const mr = box.querySelector('#microRot'); mr.innerHTML = Array.from({ length: 8 }, (_, i) => `<rect x="-2" y="-30" width="4" height="8" fill="#ffd24a" transform="rotate(${i * 45})"/>`).join('');
     this.svg = box.querySelector('svg');
-    // wheel drag
+    // wheel drag: angle about the wheel centre. Works for mouse and real touch (pointer capture, touch-action none, touchstart default prevented so the page never scrolls or fires a ghost click).
+    // Passing through the centre (dead zone) pauses the turn and re-syncs on exit, so there is no 180-degree flip. Coalesced touch samples are all applied.
     const wheel = box.querySelector('#wheel'); let drag = null;
-    const ang = (e) => { const r = wheel.getBoundingClientRect(); const cx = r.left + r.width / 2, cy = r.top + r.height / 2; return Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI; };
-    wheel.addEventListener('pointerdown', e => { e.preventDefault(); wheel.setPointerCapture(e.pointerId); drag = { a: ang(e) }; wheel.style.cursor = 'grabbing'; });
-    wheel.addEventListener('pointermove', e => { if (!drag) return; const a = ang(e); let d = a - drag.a; if (d > 180) d -= 360; if (d < -180) d += 360; drag.a = a; S.act.wheel(d / 1800); });
-    const end = () => { drag = null; wheel.style.cursor = 'grab'; }; wheel.addEventListener('pointerup', end); wheel.addEventListener('pointercancel', end);
+    const geo = () => { const c = wheel.querySelector('#wheelRing'), r = c.getBoundingClientRect(); return { cx: r.left + r.width / 2, cy: r.top + r.height / 2, R: r.width / 2 }; };
+    const ang = (e, g) => Math.atan2(e.clientY - g.cy, e.clientX - g.cx) * 180 / Math.PI;
+    wheel.addEventListener('touchstart', e => e.preventDefault(), { passive: false }); wheel.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+    wheel.addEventListener('contextmenu', e => e.preventDefault());
+    wheel.addEventListener('pointerdown', e => { e.preventDefault(); try { wheel.setPointerCapture(e.pointerId); } catch { } const g = geo(); drag = { id: e.pointerId, a: ang(e, g), dead: Math.hypot(e.clientX - g.cx, e.clientY - g.cy) < 0.22 * g.R }; wheel.style.cursor = 'grabbing'; wheel.classList.add('on'); });
+    wheel.addEventListener('pointermove', e => {
+      if (!drag || e.pointerId !== drag.id) return; const g = geo();
+      // a fast finger or a slow frame rate coalesces many samples into one event: walk through all of them so no turn is lost
+      const evs = (e.getCoalescedEvents && e.getCoalescedEvents()) || []; const list = evs.length ? evs : [e];
+      for (const p of list) {
+        if (Math.hypot(p.clientX - g.cx, p.clientY - g.cy) < 0.22 * g.R) { drag.dead = true; continue; }
+        const a = ang(p, g); if (drag.dead) { drag.dead = false; drag.a = a; continue; }
+        let d = a - drag.a; if (d > 180) d -= 360; if (d < -180) d += 360; drag.a = a;
+        if (d) S.act.wheel(d / 1800);
+      }
+    });
+    const end = (e) => { if (drag && (!e || e.pointerId === drag.id)) { drag = null; wheel.style.cursor = 'grab'; wheel.classList.remove('on'); } }; wheel.addEventListener('pointerup', end); wheel.addEventListener('pointercancel', end); wheel.addEventListener('lostpointercapture', end);
     box.querySelector('#lockIcon').addEventListener('click', () => S.act.unlock());
     box.querySelector('#hUnlock').onclick = () => S.act.unlock();
     // macro buttons (both svg rects and the big button hold the macro slide)
@@ -196,6 +247,10 @@ export class UI {
     // deploy buttons
     this.hold(box.querySelector('#hDep'), () => { S.hold('deploy', 1); S.hold('deployFast', 0); }, () => { S.hold('deploy', 0); });
     this.hold(box.querySelector('#hDepF'), () => { S.hold('deploy', 1); S.hold('deployFast', 1); }, () => { S.hold('deploy', 0); S.hold('deployFast', 0); });
+    this.hold(box.querySelector('#mHoldDep'), () => { S.hold('deploy', 1); S.hold('deployFast', 0); }, () => { S.hold('deploy', 0); });
+    this.hold(box.querySelector('#mHoldRes'), () => { S.hold('deploy', -1); S.hold('deployFast', 0); }, () => { S.hold('deploy', 0); });
+    for (const [id, mm] of [['#mTapDep', 2], ['#mTapRes', -2]]) { const b = box.querySelector(id); b.addEventListener('touchstart', e => e.preventDefault(), { passive: false }); b.addEventListener('contextmenu', e => e.preventDefault()); b.addEventListener('selectstart', e => e.preventDefault()); b.addEventListener('pointerdown', e => { if (e.button === 0 || e.pointerType === 'touch') { e.preventDefault(); if (!b.disabled) S.act.stepMm(mm); } }); b.addEventListener('click', e => { if (e.detail === 0 && !b.disabled) S.act.stepMm(mm); }); } // one step per tap on pointer-down (the touchstart default is prevented, so no ghost click can repeat it); Enter / Space still work
+    box.querySelector('#mUnlock').onclick = () => S.act.unlock();
     this.hold(box.querySelector('#hRes'), () => { S.hold('deploy', -1); S.hold('deployFast', 0); }, () => { S.hold('deploy', 0); });
     // micro
     const muRep = (dir) => { let iv = null; return [() => { S.act.microStep(dir * 0.25); iv = setInterval(() => S.act.microStep(dir * 0.25), 140); }, () => clearInterval(iv)]; };
@@ -203,7 +258,7 @@ export class UI {
     for (const [id, dir] of [['#hMuM', -1], ['#hMuP', 1]]) { const [a, b] = muRep(dir); this.hold(box.querySelector(id), a, b); }
     // slider fallback
     const sl = box.querySelector('#wheelSlider'); this.sliderDown = false; sl.addEventListener('pointerdown', () => { this.sliderDown = true; }); const sUp = () => { this.sliderDown = false; sl.blur(); }; sl.addEventListener('pointerup', sUp); sl.addEventListener('pointercancel', sUp); sl.addEventListener('change', () => { if (!this.sliderDown) sl.blur(); });
-    sl.oninput = () => { S.hold('sliderTarget', sl.value / 100); }; // the sim follows the slider at a safe (slow) wheel speed
+    sl.oninput = () => { S.stepExact = false; S.hold('sliderTarget', sl.value / 100); }; // the sim follows the slider at a safe (slow) wheel speed
     this.handleRef = { sl };
   }
   // ---------- keys ----------
@@ -281,6 +336,8 @@ export class UI {
     this.setText('#spdTxt', `wheel speed: ${sp < 0.005 ? 'stopped' : sp <= lim ? 'slow - good' : 'TOO FAST'}`);
     $('#gSpd').style.width = clamp(sp / 0.25 * 100, 0, 100) + '%'; $('#gSpd').style.background = sp > lim ? '#ff6b57' : '#4c8dff';
     const sl = this.handleRef.sl; if (!this.sliderDown) sl.value = Math.round(d.f * 100);
+    { const ph = S.phase, on = ph >= 5 && ph <= 7; $('#mHoldDep').disabled = !on; $('#mTapDep').disabled = !on; $('#mHoldRes').disabled = ph < 5 || ph > 6; $('#mTapRes').disabled = ph < 5 || ph > 6; $('#mUnlock').disabled = !d.locked; $('#mUnlock').classList.toggle('attn', d.locked && S.chk.secondView);
+      { const sp2 = Math.max(0, S.v.speed || 0), lim2 = (d.f < 0.8 ? PH.CONSTANTS.safeSpeedMmS : PH.CONSTANTS.safeSpeedPost80MmS) / PH.CONSTANTS.capsuleTravelMm; this.setText('#mdTxt', `deployed ${Math.round(d.f * 100)}% - ${(d.retractMm || 0).toFixed(1)} mm${d.locked ? ' - LOCK' : ''}\n${sp2 < 0.005 ? 'stopped' : sp2 <= lim2 ? 'slow - good' : 'TOO FAST'}`); } }
     $('#hMacro').disabled = !(S.phase === 8 && d.released); $('#hUnlock').disabled = !d.locked; $('#hUnlock').classList.toggle('attn', d.locked && S.chk.secondView);
     $('#hRes').disabled = S.phase < 5 || S.phase > 6; $('#hDep').disabled = S.phase < 5 || S.phase > 7; $('#hDepF').disabled = S.phase < 5 || S.phase > 7;
     // keep sticky top height var for debugging
