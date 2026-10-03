@@ -1,7 +1,9 @@
 // FlexNav delivery system modelled as separate named parts, plus stiff wire.
 import * as THREE from 'three';
 import { D2R, clamp, lerp, smooth } from './util.js';
-import { anatMat, fluMat } from './scene.js';
+import { anatMat, fluMat, fluTube } from './scene.js';
+import { Centreline, CL } from './centreline.js';
+import { VarTube } from './tube.js';
 import { R_ANN } from './anatomy.js';
 
 export const DEV = { noseL: 22, Lv: 40, Lcap: 52, Rn: 4.3, Rshaft: 2.3, Rsheath: 3.4, Rinner: 1.4, total: 1000, seg: 4, rCrimp: 3.3 };
@@ -20,34 +22,6 @@ export const PARTS = {
   leaflets: { name: 'Intra-annular leaflets', info: 'Visible once unsheathed. Closed before release, open flat against the frame after.' },
 };
 
-class DynTube {
-  constructor(maxPts, radial = 6) {
-    this.maxPts = maxPts; this.radial = radial;
-    this.pos = new Float32Array(maxPts * (radial + 1) * 3);
-    const idx = [];
-    for (let i = 0; i < maxPts - 1; i++) for (let j = 0; j < radial; j++) { const a = i * (radial + 1) + j, b = a + radial + 1; idx.push(a, b, a + 1, b, b + 1, a + 1); }
-    this.geo = new THREE.BufferGeometry();
-    this.attr = new THREE.BufferAttribute(this.pos, 3); this.attr.setUsage(THREE.DynamicDrawUsage);
-    this.geo.setAttribute('position', this.attr); this.geo.setIndex(idx);
-    this.count = 0;
-  }
-  set(points, r) {
-    const n = Math.min(points.length, this.maxPts), R = this.radial;
-    const t = new THREE.Vector3(), a = new THREE.Vector3(), b = new THREE.Vector3(), nn = new THREE.Vector3(), bb = new THREE.Vector3();
-    let nrm = new THREE.Vector3(0, 0, 1);
-    for (let i = 0; i < this.maxPts; i++) {
-      const p = points[Math.min(i, n - 1)];
-      t.copy(points[Math.min(n - 1, i + 1)]).sub(points[Math.min(n - 1, Math.max(0, i - 1))]); if (t.lengthSq() < 1e-8) t.set(0, 1, 0); t.normalize();
-      nrm.addScaledVector(t, -nrm.dot(t)); if (nrm.lengthSq() < 1e-6) nrm.set(1, 0, 0).addScaledVector(t, -t.x); nrm.normalize();
-      bb.crossVectors(t, nrm);
-      const rr = i >= n ? 0 : r;
-      for (let j = 0; j <= R; j++) { const th = j / R * Math.PI * 2, c = Math.cos(th), s = Math.sin(th), q = (i * (R + 1) + j) * 3;
-        this.pos[q] = p.x + (nrm.x * c + bb.x * s) * rr; this.pos[q + 1] = p.y + (nrm.y * c + bb.y * s) * rr; this.pos[q + 2] = p.z + (nrm.z * c + bb.z * s) * rr; }
-    }
-    this.attr.needsUpdate = true;
-  }
-}
-
 export class Device {
   constructor(scene, reg, F, P, rootGroup) {
     this.scene = scene; this.reg = reg; this.F = F; this.P = P; this.path = P.path; this.lm = P.lm;
@@ -58,7 +32,6 @@ export class Device {
       const m = new THREE.InstancedMesh(cyl, anat, count); m.count = 0; m.userData.part = id;
       scene.add(m); reg.add(m, { anat, flu, group: 'device' }); this.parts[id].push(m); return m;
     };
-    const N = Math.ceil(DEV.total / DEV.seg);
     this.matA = {
       sheath: anatMat(0x7fd0ff, 0.42, { emissive: 0x001a2a }), outerShaft: anatMat(0xb7c0cc, 0.95, { metal: 0.4 }), capsule: anatMat(0x5fa3ff, 0.55, { emissive: 0x001533, metal: 0.3 }),
       innerShaft: anatMat(0xf5f5f5, 1), nosecone: anatMat(0x2ee6c4, 0.95, { emissive: 0x003a30 }),
@@ -66,11 +39,13 @@ export class Device {
       vision: anatMat(0xff3b52, 1, { emissive: 0x70101c }), posts: anatMat(0xfff176, 1, { emissive: 0x5a5000 }),
       cuff: anatMat(0xe9f7ff, 0.5, { emissive: 0x0a1e2a }), leaflets: anatMat(0xffa9c2, 0.7, { emissive: 0x3a1020 }), frame: anatMat(0xc9d6ea, 1, { metal: 0.55, rough: 0.35, emissive: 0x151c28 }),
     };
-    this.imSheath = mk('sheath', N, this.matA.sheath, fluMat(0.045));
-    this.imShaft = mk('outerShaft', N, this.matA.outerShaft, fluMat(0.07));
-    this.imCap = mk('capsule', 40, this.matA.capsule, fluMat(0.16));
-    this.imInner = mk('innerShaft', 40, this.matA.innerShaft, fluMat(0.14));
-    this.imNose = mk('nosecone', 12, this.matA.nosecone, fluMat(0.2));
+    this.cl = new Centreline(F, P.path);
+    const tube = (id, maxRings, anat, flu, radial = 14) => { const t = new VarTube(maxRings, radial); const m = new THREE.Mesh(t.geo, anat); m.userData.part = id; scene.add(m); reg.add(m, { anat, flu, group: 'device' }); this.parts[id].push(m); m.userData.tube = t; return t; };
+    this.tSheath = tube('sheath', 520, this.matA.sheath, fluTube(0.045, 0.45));
+    this.tShaft = tube('outerShaft', 40, this.matA.outerShaft, fluTube(0.07, 0.4));
+    this.tCap = tube('capsule', 60, this.matA.capsule, fluTube(0.16, 0.3), 16);
+    this.tInner = tube('innerShaft', 60, this.matA.innerShaft, fluTube(0.14, 0.4));
+    this.tNose = tube('nosecone', 60, this.matA.nosecone, fluTube(0.2, 0.3), 16);
     const solo = (id, a, f, geo = cyl) => { const m = new THREE.Mesh(geo, a); scene.add(m); reg.add(m, { anat: a, flu: f, group: 'device' }); m.userData.part = id; this.parts[id].push(m); return m; };
     this.capMarker = solo('capsuleMarker', this.matA.capsuleMarker, fluMat(0.95));
     this.innerMarker = solo('innerMarker', this.matA.innerMarker, fluMat(0.9));
@@ -90,9 +65,9 @@ export class Device {
     this.cuff = dyn('cuff', 36, 6, this.matA.cuff, fluMat(0.07));
     this.leaf = [0, 1, 2].map(() => dyn('leaflets', 12, 8, this.matA.leaflets, fluMat(0.05)));
     this.parts.visionMarkers.push(...[]); // already pushed via solo
-    this.wireTube = new DynTube(520, 5);
+    this.wireTube = new VarTube(1100, 8);
     this.wireMesh = new THREE.Mesh(this.wireTube.geo, anatMat(0xd9e2ee, 1, { metal: 0.6 }));
-    scene.add(this.wireMesh); reg.add(this.wireMesh, { anat: this.wireMesh.material, flu: fluMat(0.34), group: 'device' });
+    scene.add(this.wireMesh); reg.add(this.wireMesh, { anat: this.wireMesh.material, flu: fluTube(0.36, 0.35), group: 'device' });
     this.wireKey = ''; this.tmp = new THREE.Vector3();
     // glow rings for bounce visual etc
     this.ncc = F.cuspAz.NCC; this.lcc = F.cuspAz.LCC;
@@ -133,47 +108,35 @@ export class Device {
     const fv = dv.fv ?? f, kz = dv.kz || 1; this.kz = kz; // frame opening (with recapture hysteresis) and foreshortening scale from physics.js
     const capEdge = DEV.noseL + (f < 1 ? f * Lv * kz : Lv * (1 - dv.macro));
     const capEnd = capEdge + DEV.Lcap;
-    const nSeg = Math.ceil(DEV.total / DEV.seg);
-    const prof = (d) => d < DEV.noseL ? 'nose' : d < capEdge ? 'inner' : d < capEnd ? 'cap' : d < capEnd + 14 ? 'shaft' : 'sheath';
-    const counts = { nose: 0, inner: 0, cap: 0, shaft: 0, sheath: 0 };
-    const mats = { nose: this.imNose, inner: this.imInner, cap: this.imCap, shaft: this.imShaft, sheath: this.imSheath };
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
     const a = new THREE.Vector3(), b = new THREE.Vector3(), mid = new THREE.Vector3(), dir = new THREE.Vector3();
-    const posAt = (d, out) => {
-      const s = sTip - d; path.pos(s, out); this.latVec(s, latV);
-      let off = lat * Math.exp(-d / 85);
-      if (fx) { const ds = (sTip - d) - fx.s; const t = fx.t; const amp = fx.type === 'kink' ? 14 : fx.type === 'force' ? 9 : 0; if (amp) { off += 0; const bump = amp * Math.exp(-(ds * ds) / (2 * 14 * 14)) * smooth(0, 0.25, t) * (1 - smooth(1.2, 2.0, t)); out.addScaledVector(path.Nn[Math.round(clamp(s, 0, path.length) / path.h)], bump); } }
-      out.addScaledVector(latV, off);
-      return out;
-    };
-    let prev = posAt(0, new THREE.Vector3()), p2 = new THREE.Vector3();
-    this.tipPos = prev.clone();
-    for (let i = 1; i <= nSeg; i++) {
-      const d0 = (i - 1) * DEV.seg, d1 = i * DEV.seg, dm = (d0 + d1) / 2;
-      posAt(d1, p2);
-      const kind = prof(dm), im = mats[kind];
-      if (kind === 'cap' && counts.cap >= 40) { prev.copy(p2); continue; }
-      if (kind === 'inner' && counts.inner >= 40) { prev.copy(p2); continue; }
-      let r = kind === 'nose' ? lerp(1.0, DEV.Rn - 0.2, Math.pow(smooth(0, DEV.noseL, dm), 0.7)) : kind === 'inner' ? DEV.Rinner : kind === 'cap' ? DEV.Rn : kind === 'shaft' ? DEV.Rshaft : DEV.Rsheath;
-      mid.copy(prev).add(p2).multiplyScalar(0.5); dir.copy(p2).sub(prev); const len = dir.length() + 0.15; dir.normalize();
-      q.setFromUnitVectors(up, dir); sc.set(r, len, r); m4.compose(mid, q, sc);
-      im.setMatrixAt(counts[kind]++, m4);
-      prev.copy(p2);
-    }
-    for (const k in counts) { const im = mats[k]; im.count = counts[k]; im.instanceMatrix.needsUpdate = true; }
-    // markers
+    // ---------- smooth centreline (tip -> handle): anatomical path + smooth flex offset, bend-radius limited, low-passed in time ----------
+    const cl = this.cl; cl.update(sTip, lat, fx, dt, capEnd);
+    this.tipPos = cl.at(0, this.tipPos || new THREE.Vector3());
+    const ks = (d) => cl.kinkScale(d, fx, sTip), sm = smooth;
+    const noseR = (d) => lerp(1.0, DEV.Rn - 0.2, Math.pow(sm(0, DEV.noseL, d), 0.7)) * Math.sqrt(sm(0, 1.4, d));      // tapered, rounded tip
+    const innerR = () => DEV.Rinner;
+    const capR = (d) => { const u = d - capEdge; return (DEV.Rn - 0.3 * (1 - sm(0, 1.6, u))) * (1 - (1 - (DEV.Rshaft + 0.5) / DEV.Rn) * sm(DEV.Lcap - 5, DEV.Lcap, u)) * ks(d); }; // rigid body, bevelled front, tapered shoulder
+    const shaftR = (d) => lerp(DEV.Rshaft + 0.5, DEV.Rshaft, sm(0, 3, d - capEnd)) * lerp(1, DEV.Rsheath / DEV.Rshaft, sm(8, 14, d - capEnd)) * ks(d);
+    const sheathR = (d) => DEV.Rsheath * ks(d);
+    this.tNose.fromCentreline(cl, 0, DEV.noseL, 1, (d) => noseR(d));
+    this.tInner.fromCentreline(cl, DEV.noseL, capEdge, 2, innerR);
+    this.tCap.fromCentreline(cl, capEdge, capEnd, 2, capR);
+    this.tShaft.fromCentreline(cl, capEnd, capEnd + 14, 2, shaftR);
+    this.tSheath.fromCentreline(cl, capEnd + 14, DEV.total, 2, sheathR);
+    // markers (follow the smooth centreline; rings sit on the capsule edge and the inner shaft)
+    const posAt = (d, out) => cl.at(d, out);
     const place = (mesh, d0, d1, r) => { posAt(d0, a); posAt(d1, b); mid.copy(a).add(b).multiplyScalar(0.5); dir.copy(b).sub(a); const len = dir.length(); dir.normalize(); q.setFromUnitVectors(up, dir); sc.set(r, len, r); m4.compose(mid, q, sc); mesh.matrix.copy(m4); mesh.matrixAutoUpdate = false; mesh.matrixWorldNeedsUpdate = true; mesh.matrixWorld.copy(m4); };
     place(this.capMarker, capEdge + 0.1, capEdge + 1.8, DEV.Rn + 0.25);
     place(this.innerMarker, DEV.noseL - 0.5, DEV.noseL + 1.7, 1.95);
     // ---------- valve ----------
     // valve frame: origin at inflow edge centre
-    let sOrigin;
-    if (dv.released && dv.valveS != null) sOrigin = dv.valveS; else sOrigin = sTip - DEV.noseL;
-    const vo = path.pos(sOrigin, new THREE.Vector3());
-    this.latVec(sOrigin, latV);
-    const latHere = dv.released ? 0 : lat * Math.exp(-DEV.noseL / 85) * (1 - smooth(0.3, 0.8, f));
-    vo.addScaledVector(latV, latHere);
-    path.tan(sOrigin, dir); const axis = dir.clone().negate(); // toward the aortic side
+    const bl = smooth(0.3, 0.8, f); let vo, axis;
+    if (dv.released && dv.valveS != null) { vo = path.pos(dv.valveS, new THREE.Vector3()); axis = path.tan(dv.valveS, new THREE.Vector3()).negate(); }
+    else {
+      vo = cl.at(DEV.noseL, new THREE.Vector3()).addScaledVector(cl.offsetAt(DEV.noseL, new THREE.Vector3()), -bl);   // the flex offset relaxes as the valve opens
+      const sO = sTip - DEV.noseL; axis = cl.tan(DEV.noseL, new THREE.Vector3()).multiplyScalar(1 - bl).addScaledVector(path.tan(sO, dir).negate(), bl).normalize();
+    }
     const e1 = F.ex.clone().addScaledVector(axis, -F.ex.dot(axis)).normalize(); const e2 = new THREE.Vector3().crossVectors(axis, e1);
     this.vo = vo; this.va = axis; this.ve1 = e1; this.ve2 = e2;
     const tiltTot = dv.tilt * smooth(0.35, 0.8, f);
@@ -231,14 +194,16 @@ export class Device {
   updateWire(S) {
     const w = S.wire; const key = [Math.round(w.s * 4), S.wireVer].join(',');
     if (key === this.wireKey) return; this.wireKey = key;
-    const pts = []; const path = this.path;
+    const ctrl = []; const path = this.path;
     const sEnd = Math.min(w.s, path.length + 120);
-    for (let s = -40; s < sEnd; s += 3) pts.push(path.pos(s, new THREE.Vector3()));
-    const T = path.pos(sEnd, new THREE.Vector3()); pts.push(T.clone());
+    for (let s = -40; s < sEnd - 3; s += 6) ctrl.push(path.pos(s, new THREE.Vector3()));
+    const T = path.pos(sEnd, new THREE.Vector3()); ctrl.push(T.clone());
     const t = path.tan(Math.min(sEnd, path.length - 1), new THREE.Vector3()), u = this.F.ex.clone();
     u.addScaledVector(t, -u.dot(t)).normalize();
-    const Rc = 8; const C = T.clone().addScaledVector(u, Rc);
-    for (let th = 12; th <= 430; th += 14) { const a = th * D2R; pts.push(C.clone().addScaledVector(u, -Math.cos(a) * Rc).addScaledVector(t, Math.sin(a) * Rc + th * 0.04)); }
-    this.wireTube.set(pts, 0.45);
+    const Rc = 8; const C = T.clone().addScaledVector(u, Rc);   // pigtail: a smooth, slightly opening spiral
+    for (let th = 10; th <= 430; th += 10) { const a = th * D2R; ctrl.push(C.clone().addScaledVector(u, -Math.cos(a) * Rc).addScaledVector(t, Math.sin(a) * Rc + th * 0.012)); }
+    const curve = new THREE.CatmullRomCurve3(ctrl, false, 'centripetal'); curve.arcLengthDivisions = ctrl.length * 6;
+    const len = curve.getLength(); const n = Math.min(1090, Math.max(8, Math.ceil(len / 1.5)));
+    this.wirePts = curve.getSpacedPoints(n); this.wireTube.fromPoints(this.wirePts, () => 0.5);
   }
 }

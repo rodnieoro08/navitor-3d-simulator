@@ -13,6 +13,14 @@ export function fluMat(att, line = false) {
   const p = { color: new THREE.Color(att, att, att), blending: THREE.AdditiveBlending, transparent: true, depthTest: false, depthWrite: false, side: THREE.DoubleSide };
   return line ? new THREE.LineBasicMaterial(p) : new THREE.MeshBasicMaterial(p);
 }
+// Fluoro material for continuous tubes: density follows the chord through a cylinder (soft edge), additive like fluMat.
+export function fluTube(att, soft = 0.3) {
+  return new THREE.ShaderMaterial({
+    uniforms: { uAtt: { value: att }, uSoft: { value: soft } }, transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    vertexShader: 'varying vec3 vN; void main(){ vN = normalize(normalMatrix*normal); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+    fragmentShader: 'varying vec3 vN; uniform float uAtt; uniform float uSoft; void main(){ float c = abs(normalize(vN).z); float a = uAtt*(uSoft + (1.0-uSoft)*pow(c,0.75)); gl_FragColor = vec4(vec3(a),1.0); }',
+  });
+}
 export const lumenUniforms = {}; // name -> {uFront,uStrength}
 export function lumenMat(name, rev = false) {
   const u = { uFront: { value: -1 }, uStrength: { value: 0 }, uRev: { value: rev ? 1 : 0 } };
