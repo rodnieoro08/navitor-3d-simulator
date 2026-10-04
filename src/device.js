@@ -14,7 +14,7 @@ export const PARTS = {
   capsuleMarker: { name: 'Capsule marker (radiopaque)', info: 'Ring at the capsule edge. Shows how far the capsule has been withdrawn.' },
   innerShaft: { name: 'Inner shaft', info: 'The valve rides on it. It stays put while the capsule retracts.' },
   innerMarker: { name: 'Inner-shaft marker band', info: 'Place this at the annular plane before unsheathing (phase 4).' },
-  nosecone: { name: 'Nosecone', info: 'Atraumatic tip. Closed again with the macro slide only - never with the deployment wheel.' },
+  nosecone: { name: 'Nosecone', info: 'White atraumatic tip with the wire exit hole on its axis. Closed again with the macro slide only - never with the deployment wheel.' },
   visionMarkers: { name: 'Vision markers (3 x 3 mm)', info: 'Three radiopaque markers 3 mm above the inflow edge, each exactly in line with a commissural post (120 deg apart). Their height is your depth target; their spacing and which one is on which side show rotation and commissure alignment.' },
   frame: { name: 'Nitinol frame (diamond cells)', info: 'Silver self-expanding lattice: small dense diamond cells at the inflow, a waist at the leaflets, then large elongated cells flaring to three tall arched peaks (a bead on each post tip). Foreshortens as it opens. In fluoro it is a dark lattice, densest at the inflow.' },
   posts: { name: 'Commissural posts', info: 'Three posts running up to the arched outflow peaks, each directly above a Vision marker. Line them up with the native commissures to keep coronary access.' },
@@ -34,7 +34,7 @@ export class Device {
     };
     this.matA = {
       sheath: anatMat(0x7fd0ff, 0.42, { emissive: 0x001a2a }), outerShaft: anatMat(0xb7c0cc, 0.55, { metal: 0.4 }), capsule: anatMat(0x5fa3ff, 0.55, { emissive: 0x001533, metal: 0.3 }),
-      innerShaft: anatMat(0xf5f5f5, 0.7), nosecone: anatMat(0x2ee6c4, 0.62, { emissive: 0x003a30 }), tipHole: anatMat(0x04100e, 1),
+      innerShaft: anatMat(0xf5f5f5, 0.7), nosecone: anatMat(0xffffff, 0.74, { emissive: 0x909090, rough: 0.5 }), noseOutline: anatMat(0x2c3a4d, 1, { rough: 0.6 }), tipHole: anatMat(0x04100e, 1),
       capsuleMarker: anatMat(0xffd54a, 1, { emissive: 0x6a5000 }), innerMarker: anatMat(0xff8a3d, 1, { emissive: 0x5a2200 }),
       vision: anatMat(0xff3b52, 1, { emissive: 0x70101c }), posts: anatMat(0xf1ead0, 1, { emissive: 0x3a3418, metal: 0.5, rough: 0.35 }),
       cuff: anatMat(0xe9ecee, 0.8, { emissive: 0x1a1d20, rough: 0.9 }), leaflets: anatMat(0xf3e6c2, 0.92, { emissive: 0x3a3018, rough: 0.8 }), frame: anatMat(0xdde4ec, 1, { metal: 0.85, rough: 0.28, emissive: 0x1b2230 }), foot: anatMat(0x2a2f36, 1, { metal: 0.6, rough: 0.4 }), bead: anatMat(0xf4f7fa, 1, { metal: 0.95, rough: 0.2, emissive: 0x20262e }),
@@ -45,7 +45,9 @@ export class Device {
     this.tShaft = tube('outerShaft', 40, this.matA.outerShaft, fluTube(0.07, 0.4));
     this.tCap = tube('capsule', 60, this.matA.capsule, fluTube(0.16, 0.3), 16);
     this.tInner = tube('innerShaft', 60, this.matA.innerShaft, fluTube(0.14, 0.4));
+    this.matA.noseOutline.side = THREE.FrontSide;   // thin dark-slate rim behind the white nosecone (VarTube winding is inward-facing, so FrontSide = the far wall) so it reads against the anatomy and the white NaviSeal / inner shaft (3D only, not drawn in fluoro)
     this.tNose = tube('nosecone', 60, this.matA.nosecone, fluTube(0.2, 0.3), 16);
+    this.tNoseOut = tube('nosecone', 60, this.matA.noseOutline, null, 16);
     const solo = (id, a, f, geo = cyl) => { const m = new THREE.Mesh(geo, a); scene.add(m); reg.add(m, { anat: a, flu: f, group: 'device' }); m.userData.part = id; this.parts[id].push(m); return m; };
     this.tipHole = solo('nosecone', this.matA.tipHole, fluMat(0));   // dark wire-exit hole in the nosecone tip face
     this.capMarker = solo('capsuleMarker', this.matA.capsuleMarker, fluMat(0.95));
@@ -164,6 +166,7 @@ export class Device {
     const shaftR = (d) => lerp(DEV.Rshaft + 0.5, DEV.Rshaft, sm(0, 3, d - capEnd)) * lerp(1, DEV.Rsheath / DEV.Rshaft, sm(8, 14, d - capEnd)) * ks(d);
     const sheathR = (d) => DEV.Rsheath * ks(d);
     this.tNose.fromCentreline(cl, 0, DEV.noseL, 1, (d) => noseR(d));
+    this.tNoseOut.fromCentreline(cl, 0, DEV.noseL, 1, (d) => noseR(d) + 0.28);
     this.tInner.fromCentreline(cl, DEV.noseL, capEdge, 2, innerR);
     this.tCap.fromCentreline(cl, capEdge, capEnd, 2, capR);
     this.tShaft.fromCentreline(cl, capEnd, capEnd + 14, 2, shaftR);

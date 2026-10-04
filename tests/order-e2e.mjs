@@ -25,7 +25,7 @@ const coach0 = await txt('#coachText'); ok(/OPEN nosecone/.test(coach0) && /desc
 await tab('handle'); await page.waitForTimeout(300);
 ok(await page.evaluate(() => document.querySelector('#hMacro').dataset.macro) === 'locked', 'MACRO button state: locked'); ok(/LOCKED/.test(await txt('#hMacro')) && /descending aorta/.test(await txt('#hMacro')), 'MACRO button label: "' + await txt('#hMacro') + '"');
 ok(/locked/i.test(await txt('#mac1t')) && /descending/i.test(await txt('#tMacro2')), 'handle diagram: "' + await txt('#mac1t') + '" / "' + await txt('#tMacro2') + '"');
-ok(await page.evaluate(() => document.querySelector('#mac1').getAttribute('stroke')) !== '#2ee6c4', 'handle diagram: MACRO slide drawn in the locked (amber) style');
+ok(await page.evaluate(() => document.querySelector('#mac1').getAttribute('stroke')) !== '#f5f5f5', 'handle diagram: MACRO slide drawn in the locked (amber) style');
 ok(await page.evaluate(() => !document.querySelector('#hMacro').disabled && document.querySelector('#hMacro').getAttribute('aria-disabled') === 'true'), 'locked button is flagged aria-disabled but can still be pressed (it explains why it refuses)');
 await shots('p8-locked-root');
 await holdBtn('#hMacro', 1300); s = await st();
@@ -39,7 +39,7 @@ await tab('handle'); await holdBtn('#hMacro', 800); s = await st(); ok(s.dev.mac
 r = await step(lm.archStart - 27); s = await st(); ok(!r.fx && s.dev.s <= lm.archStart - 25 + 1 && s.dev.macro === 0 && s.phase === 8, 'open system is now in the descending aorta (s=' + s.dev.s.toFixed(0) + '), nosecone still open, no failure');
 await page.waitForTimeout(600); await tab('handle');
 ok(await page.evaluate(() => document.querySelector('#hMacro').dataset.macro) === 'ready' && /READY/.test(await txt('#hMacro')), 'MACRO button now READY: "' + await txt('#hMacro') + '"');
-ok(/READY/.test(await txt('#tMacro2')) && await page.evaluate(() => document.querySelector('#mac1').getAttribute('stroke')) === '#2ee6c4', 'handle diagram: "' + await txt('#tMacro2') + '", enabled style');
+ok(/READY/.test(await txt('#tMacro2')) && await page.evaluate(() => document.querySelector('#mac1').getAttribute('stroke')) === '#f5f5f5', 'handle diagram: "' + await txt('#tMacro2') + '", enabled style');
 ok(/descending aorta, clear of the arch: now close the nosecone/.test(await txt('#coachText')), 'coach line: now close the nosecone'); await shots('p8-ready-descending');
 await holdBtn('#hMacro', 2000); s = await st(); ok(s.dev.macro > 0.2, 'MACRO hold now closes the nosecone (macro ' + s.dev.macro + ')');
 await page.evaluate(() => __drv.phase8()); s = await st(); ok(s.phase === 9, 'after closure the withdrawal continues out the iliac -> phase 9');

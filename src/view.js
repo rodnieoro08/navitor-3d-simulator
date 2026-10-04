@@ -190,7 +190,7 @@ export class Views {
         if (S.phase >= 4) { lab('RCA', F.pt(-60, 24, 12).add(rd), '#66d9a0'); lab('LCA', F.pt(60, 24, 13).add(rd), '#ff8fb0'); }
       } else {
         const sT = clamp(d.s, 0, S.path.length);
-        lab('FlexNav nosecone', this.dev.tipPos || S.path.pos(sT), '#2ee6c4');
+        lab('FlexNav nosecone', this.dev.tipPos || S.path.pos(sT), '#ffffff');
         if (S.phase <= 2) lab('Iliac plaque (Ca)', S.path.pos(S.lm.plaque), '#f3e9cf');
         lab('Wire', S.path.pos(clamp(d.s + 40, 0, S.path.length)), '#d9e2ee');
       }
