@@ -66,8 +66,8 @@ await page.evaluate(() => { __drv.goPhase1(); __drv.goDesc(); __drv.setRotation(
 await page.evaluate(() => { __sim.sim.act.setCarm(-30, -30); });
 await page.waitForTimeout(1500);
 const nStruts = async () => page.evaluate(() => { const d = __sim.views.dev; return { count: d.struts.count, vis: d.struts.visible, nC: d.nC, rows: d.nRows }; });
-let q = await nStruts(); ok(q.nC === 9 && q.rows === 3, `frame is 3 rows x ${q.nC} large diamond cells (not a dense mesh)`);
-await page.evaluate(() => __drv.deployTo(0.5)); await page.waitForTimeout(800); q = await nStruts(); ok(q.count > 0 && q.count <= 9 * 3 * 2 * 3, 'partial deployment: frame struts rendered (' + q.count + ' segments)');
+let q = await nStruts(); ok(q.nC === 12 && q.rows === 4, `frame: ${q.nC} dense inflow cells + 6 large elongated outflow cells in ${q.rows} rows (not a uniform mesh)`);
+await page.evaluate(() => __drv.deployTo(0.5)); await page.waitForTimeout(800); q = await nStruts(); ok(q.count > 0 && q.count <= 276, 'partial deployment: frame struts rendered (' + q.count + ' segments)');
 const rad = async () => page.evaluate(() => { const d = __sim.views.dev, f = __sim.sim.dev.f, ld = f * 40 + 9 * Math.max(0, Math.min(1, (f - 0.85) / 0.15)); return [d.rAt(2, ld), d.rAt(38, ld)]; });
 let r = await rad(); ok(r[0] > r[1] - 0.001 && r[0] > 11, `inflow opens first at 50% (inflow r ${r[0].toFixed(1)} mm vs outflow still crimped r ${r[1].toFixed(1)} mm)`);
 await monShot('valve-50-fluoro'); await tdShot('valve-50-3d');
@@ -75,7 +75,7 @@ await page.evaluate(() => { __sim.sim.act.setCarm(32, 30); __drv.up(40); __drv.d
 await page.waitForTimeout(1500);
 s = await st(); ok(s.dev.released && s.phase === 8, 'valve released');
 r = await rad(); ok(r[1] > r[0] + 2, `released frame is flared at the outflow (inflow r ${r[0].toFixed(1)} -> outflow r ${r[1].toFixed(1)} mm)`);
-q = await nStruts(); ok(q.count === 162, 'full frame = 162 strut segments (9 cells x 3 rows x 2 diagonals x 3 sub-segments)');
+q = await nStruts(); ok(q.count === 276, 'full frame = 276 strut pieces (dense inflow diamonds, 6 large outflow cells, 3 arched peaks, 3 marker stems)');
 ok(await page.evaluate(() => { const d = __sim.views.dev; return d.vision.length === 3 && d.posts.length === 3 && d.cuff && d.leaf.length === 3; }), 'three Vision markers, three posts, NaviSeal cuff and 3 leaflets present');
 // close-up, no contrast, to judge the frame itself
 await view('mon'); for (let i = 0; i < 4; i++) await page.locator('#zIn').click(); await page.waitForTimeout(2500);

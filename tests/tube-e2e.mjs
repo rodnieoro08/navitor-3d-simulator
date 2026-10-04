@@ -1,3 +1,4 @@
+// v11: the wire is the rail - the system takes the anatomical path's own tightest bend (about 9.1 deg per 2 mm, R ~12.7 mm in the arch/root) plus < 1 mm clearance, so the smoothness cap is 10.5 deg (was 7.5 with the old bend limiter).
 // Smooth continuous delivery system: real-UI screenshots (fluoro + 3D) in phases 1, 3, 4, 5 and geometry checks on the live tubes.
 import { launch } from './pw.mjs';
 import fs from 'fs';
@@ -24,9 +25,9 @@ const shots = async (tag) => {
 };
 const check = async (tag) => {
   const g = await geo();
-  ok(g.cl <= 7.5, `${tag}: centreline max turn ${g.cl.toFixed(2)} deg per 2 mm (<= 7.5)`);
+  ok(g.cl <= 10.5, `${tag}: centreline max turn ${g.cl.toFixed(2)} deg per 2 mm (<= 10.5)`);
   ok(g.wire <= 13.5, `${tag}: guidewire max turn ${g.wire.toFixed(2)} deg per 1.5 mm incl. the 8 mm pigtail curl (<= 13.5)`);
-  ok(g.wireShaft <= 7.5, `${tag}: guidewire shaft (without the pigtail) max turn ${g.wireShaft.toFixed(2)} deg per 1.5 mm (<= 7.5)`);
+  ok(g.wireShaft <= 10.5, `${tag}: guidewire shaft (without the pigtail) max turn ${g.wireShaft.toFixed(2)} deg per 1.5 mm (<= 10.5)`);
   ok(g.rings.tSheath > 100 && g.rings.tCap > 5 && g.rings.tNose > 10, `${tag}: continuous tubes built (rings ${JSON.stringify(g.rings)})`);
   return g;
 };
@@ -52,7 +53,7 @@ const jit = await page.evaluate(() => {
   return { worst, worstTurn };
 });
 ok(jit.worst < 3.2, `frame-to-frame centreline displacement while retreating/rotating/advancing: max ${jit.worst.toFixed(2)} mm per frame (< 3.2)`);
-ok(jit.worstTurn <= 7.5, `max turn during motion ${jit.worstTurn.toFixed(2)} deg`);
+ok(jit.worstTurn <= 10.5, `max turn during motion ${jit.worstTurn.toFixed(2)} deg`);
 // kink failure: localized soft narrowing of the sheath radius, no jagged geometry
 const kink = await page.evaluate(() => { const s = __sim.sim, dv = __sim.views.dev, cl = dv.cl; s.fx = null; s.fail('kink', { tag: 'iliac', retry: () => {} }); s.fx.t = 0.8; dv.update(s, 1 / 30);
   const sTip = s.dev.sd ?? s.dev.s; let mn = 1, at = 0, narrowN = 0; for (let d = 0; d < 1000; d += 1) { const k = cl.kinkScale(d, s.fx, sTip); if (k < mn) { mn = k; at = d; } if (k < 0.97) narrowN++; } return { mn, at, narrowN, turn: cl.maxTurn, coach: s.fx.coach }; });

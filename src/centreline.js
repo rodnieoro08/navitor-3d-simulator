@@ -12,6 +12,8 @@ export const CL = {
   decay: 85,          // mm: how far a lateral offset persists along the shaft
   tau: 0.07,          // s: time constant of the temporal offset smoothing
   passes: 50,       // fixed relaxation passes per frame
+  maxOff: 1.0,      // mm: the most the device axis may sit off the wire (rail) - lumen clearance, only where the shaft is flexed in a bend
+  offScale: 7,      // mm of gameplay 'lat' at which the visual clearance is ~76% of maxOff (tanh)
 };
 const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
@@ -47,7 +49,10 @@ export class Centreline {
     const a = (this.fresh || jump || !(dt > 0)) ? 1 : 1 - Math.exp(-Math.min(dt, 0.25) / CL.tau);
     for (let i = 0; i < n; i++) {
       const d = i * h, s = sTip - d; path.pos(s, p); this._u(Math.min(path.length, Math.max(0, s)), u);
-      const g = lat * Math.exp(-d / CL.decay);
+      // WIRE AS RAIL: the device axis IS the wire (path) centreline. The only deviation is a tiny, bounded lumen clearance (<= maxOff) that exists
+      // behind the rigid section and only where the vessel bends (flexed shaft); the nosecone, inner shaft and capsule sit exactly on the wire.
+      const kw = sm(0.0006, 0.004, path.kappa[Math.min(path.N, Math.max(0, Math.round(Math.min(path.length, Math.max(0, s)) / path.h)))]);
+      const g = CL.maxOff * Math.tanh(lat / CL.offScale) * sm(rigidEnd, rigidEnd + 30, d) * Math.exp(-Math.max(0, d - rigidEnd - 30) / CL.decay) * kw;
       for (let c = 0; c < 3; c++) { const tgt = g * u[c]; off[i * 3 + c] += (tgt - off[i * 3 + c]) * a; }
       P[i * 3] = p.x + off[i * 3]; P[i * 3 + 1] = p.y + off[i * 3 + 1]; P[i * 3 + 2] = p.z + off[i * 3 + 2];
     }
@@ -58,6 +63,9 @@ export class Centreline {
       for (let i = 0; i < n; i++) { const s = sTip - i * h, ds = s - sf; const bump = amp * Math.exp(-(ds * ds) / (2 * 16 * 16)) * sm(0, 0.25, t) * (1 - sm(1.2, 2.0, t)); if (bump < 1e-3) continue; const k = Math.round(Math.min(path.length, Math.max(0, s)) / path.h); const nn = path.Nn[k]; P[i * 3] += nn.x * bump; P[i * 3 + 1] += nn.y * bump; P[i * 3 + 2] += nn.z * bump; }
     }
     // bend-radius limit: relax, then low-pass the *correction* in time (so the limiter never flickers), then re-check
+    // (only while a 'force' failure is bending the system: in normal operation the wire is the rail and the axis is not re-routed)
+    const limiting = !!(fx && fx.type === 'force' && fx.t < 2.3); this.limiting = limiting;
+    if (!limiting) { if (this.dl) this.dl.fill(0); this.fresh2 = true; this.passes = 0; this.frames(); return; }
     const raw = this._raw || (this._raw = new Float64Array(P.length)); raw.set(P); this.relax();
     const dl = this.dl || (this.dl = new Float64Array(P.length)); const a2 = (this.fresh2 || jump || !(dt > 0)) ? 1 : 1 - Math.exp(-Math.min(dt, 0.25) / CL.tau); this.fresh2 = false;
     for (let k = 0; k < P.length; k++) { dl[k] += ((P[k] - raw[k]) - dl[k]) * a2; P[k] = raw[k] + dl[k]; }
