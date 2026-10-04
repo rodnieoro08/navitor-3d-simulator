@@ -104,6 +104,31 @@ await page.evaluate(() => { const s = __sim.sim; s.input = { adv: 1, twirl: 1 };
 await page.evaluate(() => { const s = __sim.sim; s.input = { adv: 1, twirl: 1 }; let g = 0; while (s.dev.s < s.lm.plaque + 10 && g++ < 4000) { __drv.autoFlex(); s.update(1 / 30); } s.input = {}; }); await labelCheck('phase 1 past the plaque');
 await page.evaluate(() => { __sim.reset(); __drv.goPhase1(); __drv.goDesc(); __drv.setRotation(); __drv.goArch(); __drv.goCross(); __drv.alignAt(); __sim.setAngles(-30, -30); __drv.press(); }); await page.waitForTimeout(500); await labelCheck('phase 5 root');
 await page.evaluate(() => __sim.setMode('anat')); await labelCheck('phase 5 root anatomy');
+// ---- v13: header with the Back button (between Skip phase and Reset)
+await page.evaluate(() => __sim.reset()); await page.waitForTimeout(300);
+if (mobile) await page.locator('#viewtabs button[data-vt=mon]').click();
+const hd = async (tag) => {
+  const h = await page.evaluate(() => { const R = (q) => { const b = document.querySelector(q).getBoundingClientRect(); return { x: b.left, r: b.right, y: b.top, b: b.bottom, w: b.width, h: b.height }; };
+    const ids = ['#segMode', '#segLock', '#btnOverlay', '#btnSettings', '#btnSkip', '#btnBack', '#btnReset'], rs = ids.map(R); let ov = 0, out = 0; for (let i = 0; i < rs.length; i++) { if (rs[i].x < -0.5 || rs[i].r > innerWidth + 0.5) out++; for (let j = i + 1; j < rs.length; j++) { const a = rs[i], b = rs[j]; if (a.x < b.r - 0.5 && a.r > b.x + 0.5 && a.y < b.b - 0.5 && a.b > b.y + 0.5) ov++; } }
+    const bb = document.querySelector('#btnBack'); return { skip: R('#btnSkip'), back: R('#btnBack'), reset: R('#btnReset'), ov, out, sx: document.documentElement.scrollWidth, cx: document.documentElement.clientWidth, label: bb.textContent, aria: bb.getAttribute('aria-label'), dis: bb.disabled, tag: bb.tagName, vw: innerWidth }; });
+  const sameRow = Math.abs(h.skip.y - h.back.y) < h.back.h && Math.abs(h.back.y - h.reset.y) < h.back.h;
+  ok(h.tag === 'BUTTON' && /Back/.test(h.label) && h.label.includes('\u25C0'), `${tag}: Back is a real <button> labelled "${h.label}"`);
+  ok(!!h.aria && /phase/i.test(h.aria), `${tag}: aria-label "${h.aria}"`);
+  ok(h.back.h >= 44 - 0.5, `${tag}: touch target ${Math.round(h.back.w)}x${Math.round(h.back.h)} px (>= 44 high)`);
+  ok(h.back.w >= 44, `${tag}: Back at least 44 px wide (${Math.round(h.back.w)})`);
+  if (sameRow) ok(h.skip.r <= h.back.x + 1 && h.back.r <= h.reset.x + 1, `${tag}: order Skip phase | Back | Reset on one row (${Math.round(h.skip.r)} <= ${Math.round(h.back.x)}, ${Math.round(h.back.r)} <= ${Math.round(h.reset.x)})`);
+  else ok((h.back.y >= h.skip.y - 1) && (h.reset.y >= h.back.y - 1), `${tag}: order Skip phase, Back, Reset (wrapped rows)`);
+  ok(h.ov === 0, `${tag}: no header control overlaps another`); ok(h.out === 0 && h.sx <= h.cx, `${tag}: header fits the ${h.vw}px window, no horizontal scroll`);
+  return h;
+};
+let h1 = await hd('phase 1'); ok(h1.dis, 'Back is disabled in phase 1');
+await page.focus('#btnSkip'); await page.keyboard.press('Tab'); ok(await page.evaluate(() => document.activeElement.id) === (h1.dis ? 'btnReset' : 'btnBack'), 'keyboard: Tab from Skip skips the disabled Back (phase 1) and lands on Reset');
+await page.click('#btnSkip'); await page.waitForTimeout(300); const h2 = await hd('phase 2'); ok(!h2.dis, 'Back is enabled in phase 2'); ok(/phase 1/.test(h2.aria), 'aria-label names the target phase: ' + h2.aria);
+await page.focus('#btnSkip'); await page.keyboard.press('Tab'); ok(await page.evaluate(() => document.activeElement.id) === 'btnBack', 'keyboard: Tab from Skip phase reaches Back');
+await page.keyboard.press('Enter'); await page.waitForTimeout(300); ok((await page.evaluate(() => __sim.state.phase)) === 1, 'keyboard: Enter on Back goes to the previous phase');
+await page.click('#btnSkip'); await page.click('#btnSkip'); await page.waitForTimeout(300); await page.focus('#btnBack'); await page.keyboard.press('Space'); await page.waitForTimeout(300); ok((await page.evaluate(() => __sim.state.phase)) === 2, 'keyboard: Space on Back goes to the previous phase');
+for (let i = 0; i < 6; i++) await page.click('#btnSkip'); await page.waitForTimeout(300); await hd('phase 8'); await page.click('#btnSkip'); await page.waitForTimeout(300); const h9 = await hd('phase 9 (Skip reads Finish)'); ok(!h9.dis, 'Back is enabled in phase 9');
+await page.screenshot({ path: `shots/v13/${prof}-header-back.png` });
 ok(logs.length === 0, 'no console errors: ' + JSON.stringify(logs.slice(0, 2)));
 console.log(`\n${prof}: ${pass} ok, ${bad} failed`); if (bad) console.log(fails.join('\n'));
 await browser.close(); process.exit(bad ? 1 : 0);

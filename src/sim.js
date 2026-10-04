@@ -102,6 +102,7 @@ export class Sim {
       else if (st === 'ready') c = 'You are in the descending aorta, clear of the arch: now close the nosecone with the MACRO slide (hold it), then keep the wire fixed and withdraw out the iliac.';
       else if (st === 'closed') c = 'Nosecone closed. Keep the wire fixed and withdraw the closed system out the iliac to the access site.'; }
     if (this.lastSkip && this.lastSkip.to === this.phase && !this.finished) c += ` (Phase ${this.lastSkip.from} was skipped by you and is marked on the score sheet.)`;
+    if (this.lastBack && this.lastBack.to === this.phase && !this.finished) c += ` (You went back from phase ${this.lastBack.from}: not a miss, earlier misses stay on the score sheet.)`;
     this.coach = c;
   }
   say(t, secs = 5) { this.note = t; this.noteT = secs; this.emit('note', t); }
@@ -143,6 +144,7 @@ export class Sim {
     confirmAlign: () => this.confirmAlign(),
     skipAlign: () => this.proceedToLanding(),
     skipPhase: () => this.skipPhase(),
+    backPhase: () => this.backPhase(),
     finishNow: () => this.finishNow(),
     confirmSecondView: () => this.confirmSecondView(),
     macroTry: () => this.macroTry(),
@@ -343,6 +345,64 @@ export class Sim {
     this.setCoach();
     this.say(`Phase ${from} (${PHASES[from - 1].name}) skipped. It is marked "Skipped by learner" on the score sheet; the simulation is set up for phase ${this.phase}.`, 9);
     this.emit('skip', { from, to: this.phase });
+    return true;
+  }
+  // ---------- Back (learner button) ----------
+  // Goes to the PREVIOUS phase (2-9) and sets the simulation up in a sensible, self-consistent state for it (mirror of skipPhase). It is NOT a miss: it is logged
+  // and listed on the score sheet as information ("Went back to phase N"). Everything already scored stays scored: counters are never reset, and the rows that
+  // are already missed at this moment are remembered (flags.sticky) so that redoing a step cannot turn them into a pass (no farming of a clean sheet).
+  resetValveCrimped() { // valve back inside the capsule (phases 4-5): fresh physics, no deployment
+    const d = this.dev, v = this.v;
+    d.f = 0; d.locked = false; d.lockArmed = true; d.released = false; d.valveS = null; d.sealed = false; d.leafOpen = 0; d.macro = 0; d.h = 0; d.tilt = 0; d.shift = 0; d.bounce = 0;
+    v.ph = PH.createState(); Object.assign(v, { tiltStab: 1, tiltLat: 0, sysFrozen: 0, biasFrozen: 0, extra: 0, tug: 0, tugT: 0, relExtra: 0, speed: 0, lastF: 0, stab: 0, bounceAmp: 0, touched: false, minF: 1, deepFlag: false, alignFrozen: null, resheathing: false, deepAtResheath: false });
+    this.chk.secondView = false; this.chk.secondViewDepth = null;
+  }
+  markSticky(from) { // rows that are ALREADY missed (and could be overwritten by redoing the step) stay missed
+    const F = this.flags; F.sticky = F.sticky || {}; let rows = []; try { rows = computeScore(this, true).rows; } catch (e) { rows = []; }
+    const ev = { iliac: true, nose: true, wire: true, rot: from >= 3, stop80: from >= 8, depthNcc: F.finalDepthNcc != null, depthLcc: F.finalDepthNcc != null, align: from >= 8 };
+    for (const r of rows) if (ev[r.id] && !r.pass && !F.sticky[r.id]) F.sticky[r.id] = { result: r.result, feedback: r.feedback, major: r.major };
+    if (!F.sticky.align && (F.alignSkipped || F.skipNoMarker || F.skipNoCross || F.skipNoCentre)) F.sticky.align = { result: 'The alignment re-check was skipped earlier', feedback: 'You continued without the alignment re-check at the annulus before you went back; going back does not erase that - always repeat the check in cusp overlap before you unsheathe.', major: false };
+  }
+  backPhase() {
+    if (this.finished || this.phase <= 1) return false;
+    const from = this.phase, to = from - 1, d = this.dev, lm = this.lm, F = this.flags, c = this.chk, path = this.path;
+    this.markSticky(from);
+    this.fx = null; this.fxPending = null; this.input = {}; d.twist = 0;
+    F.wentBack = F.wentBack || []; F.wentBack.push({ from, to }); this.log('phaseBack', { from, to });
+    this.p4Hint = false;
+    const place = (s) => { d.s = s; d.sd = s; d.lat = 0; d.shift = 0; };
+    const railFlex = (s) => { d.flex = clamp(path.flexReq(s + 8), 0, 1); };
+    if (from === 2) { // back to femoral / iliac entry: in the iliac, wire fixed, flexed to the bend
+      place(lm.bif + 20); railFlex(d.s); c.rot2 = false; this.setPhase(1);
+    } else if (from === 3) { // back to the descending aorta: rotation has to be set (again) before the arch
+      c.rot2 = false; place(clamp(Math.min(d.s, lm.archStart - 40), lm.descStart + 10, lm.archStart - 25)); this.centreFlex(); this.setPhase(2);
+    } else if (from === 4) { // back to the arch: partway through, flexed to the bend, rotation already set
+      c.rot2 = true; Object.assign(c, { crossed: false, centered: false, marker: false, alignConfirmed: false, alignOk: false }); place(lm.archApex - 20); railFlex(d.s); this.setPhase(3);
+    } else if (from === 5) { // back to cross-and-centre: valve crimped (fully resheathed), pulled back into the ascending aorta
+      this.resetValveCrimped(); Object.assign(c, { crossed: false, centered: false, marker: false, alignConfirmed: false, alignOk: false, rot2: true }); place(lm.ascDone + 2); this.centreFlex(); d.flex = Math.min(d.flex, 0.2); this.setPhase(4);
+    } else if (from === 6) { // back to the landing: valve crimped in the root, marker on the annular plane, cusp-overlap view, wire held
+      this.resetValveCrimped(); this.landingPosition(); d.s += 0.8; d.sd = d.s; /* marker a touch below the plane (inside the tolerance) so a clean redo gives NCC ~4 / LCC ~3.3 mm */ this.setPhase(5);
+    } else if (from === 7) { // back to the 80 % stop: re-locked at 80 %, second view to be confirmed again
+      if (d.f > 0.8) { let g = 0; while (d.f > 0.8 && g++ < 400) { d.f = Math.max(0.8, d.f - 0.01); this.updateValve(1 / 30); } }
+      d.f = Math.min(d.f, 0.8); d.locked = true; d.lockArmed = false; c.secondView = false; c.secondViewDepth = null; this.v.speed = 0; this.v.lastF = d.f; this.setPhase(6);
+    } else if (from === 8) { // back to the final release: the valve is un-released to the state just before the last turn (unlocked, ~100 %), nosecone open
+      if (this.preRelease) {
+        const pr = structuredClone(this.preRelease); this.dev = pr.dev; this.v = pr.v; this.pacing = 'off'; this.press = pr.press; this.wtens = pr.wtens;
+        const w = this.wire; this.wire = { ...pr.wire, removed: false }; if (w.s > this.wire.s) this.wire.s = w.s;
+      } else { this.resetValveCrimped(); }
+      const dd = this.dev; dd.macro = 0; dd.locked = false; dd.lockArmed = false; dd.released = false; dd.valveS = null; dd.sealed = false; dd.leafOpen = 0; dd.sd = dd.s; dd.lat = 0; dd.f = Math.min(dd.f, 0.99);
+      this.v.speed = 0; this.v.lastF = dd.f; this.chk.secondView = true; this.wire.hold = true; this.setPhase(7);
+    } else if (from === 9) { // back to the nosecone-out phase: released valve, OPEN system in the descending aorta, wire back across the valve as the rail
+      d.macro = 0; place(clamp(lm.archStart - 40, lm.bif + 40, lm.archStart - 25)); this.centreFlex(); this.wire.removed = false; this.wire.hold = true; this.wire.s = Math.max(this.wire.s, lm.ann + 58);
+      Object.assign(F, { aortogram: false, wireRemoved: false, preAngio: false, iliacAngioEnd: false, preclose: 0, hemostasis: false, pvl: null, coronary: null, phase8Done: false, phase8Closed: false }); this.setPhase(8);
+    }
+    this.wire.s = Math.max(this.wire.s, this.dev.s + 14); this.wireVer++;
+    if (!this.dev.released) this.pacing = this.pacing === 'off' ? 'off' : this.pacing;
+    this.lastSkip = null; this.lastBack = { from, to: this.phase };
+    this.p8stage = null;
+    this.setCoach();
+    this.say(`Back to phase ${this.phase} (${PHASES[this.phase - 1].name}). Going back is not a miss; anything already missed stays on the score sheet.`, 8);
+    this.emit('back', { from, to: this.phase });
     return true;
   }
   finishNow() { // phase 9: 'Finish / show score' (closure left undone is flagged as skipped)
@@ -680,6 +740,7 @@ export class Sim {
     // final release: spring-back / settle in physics.js (an unpaced release pops the valve up toward the aorta)
     if (this.cfg.finalFast && this.pacing !== 'fast') { this.flags.releasedUnpaced = true; this.say('Released without rapid pacing: the valve popped up toward the aorta.', 6); }
     if (v.maxSpeedPost80 > 0.09) { this.flags.releasedFast = true; }
+    this.preRelease = structuredClone({ dev: this.dev, v: this.v, wire: this.wire, pacing: this.pacing, press: this.press, wtens: this.wtens });   // so 'Back' from phase 8 can restore the unreleased valve
     const rel = PH.release(v.ph, this.physCtx(1 / 30, this.sysZ()), 6);
     d.h = rel.xN; d.tilt = rel.xN - rel.xL; v.extra = v.ph.extra; v.relExtra = v.ph.pop; this.flags.popMm = rel.pop; this.flags.releaseJump = Math.abs(v.ph.pop);
     d.shift = d.h - this.sysZ();

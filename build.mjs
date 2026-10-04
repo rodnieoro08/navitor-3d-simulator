@@ -6,7 +6,7 @@ const css = fs.readFileSync('src/style.css', 'utf8');
 let html = fs.readFileSync('src/template.html', 'utf8');
 import crypto from 'crypto';
 const marker = 'micro-recapture-' + crypto.createHash('sha1').update(js + css + html).digest('hex').slice(0, 10); // build marker, visible in <meta name="navitor-build">
-html = html.replace('/*BUILD*/', marker);
+html = html.split('/*BUILD*/').join(marker).split('/*BUILT*/').join(new Date().toISOString().slice(0, 16) + 'Z');
 html = html.replace('/*CSS*/', () => css).replace('/*JS*/', () => js);
 fs.writeFileSync('index.html', html);
 console.log('build marker', marker); console.log('index.html', (html.length / 1024).toFixed(0) + ' KB');

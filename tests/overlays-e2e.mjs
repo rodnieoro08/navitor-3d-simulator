@@ -72,7 +72,7 @@ const ovl = await page.evaluate(() => { const a = document.querySelector('#legen
 ok(!ovl, '3D panel: legend and the Labels / Cutaway buttons do not overlap');
 // header controls do not overlap each other (phone header is tight)
 await view(page, 'mon');
-const hdr = await page.evaluate(() => { const els = ['#segMode', '#segLock', '#btnOverlay', '#btnSettings', '#btnReset'].map(s => document.querySelector(s).getBoundingClientRect()); let o = 0; for (let i = 0; i < els.length; i++) for (let j = i + 1; j < els.length; j++) { const a = els[i], b = els[j]; if (!(a.right <= b.left + 0.5 || b.right <= a.left + 0.5 || a.bottom <= b.top + 0.5 || b.bottom <= a.top + 0.5)) o++; } return { o, sx: document.documentElement.scrollWidth, cx: document.documentElement.clientWidth }; });
+const hdr = await page.evaluate(() => { const els = ['#segMode', '#segLock', '#btnOverlay', '#btnSettings', '#btnSkip', '#btnBack', '#btnReset'].map(s => document.querySelector(s).getBoundingClientRect()); let o = 0; for (let i = 0; i < els.length; i++) for (let j = i + 1; j < els.length; j++) { const a = els[i], b = els[j]; if (!(a.right <= b.left + 0.5 || b.right <= a.left + 0.5 || a.bottom <= b.top + 0.5 || b.bottom <= a.top + 0.5)) o++; } return { o, sx: document.documentElement.scrollWidth, cx: document.documentElement.clientWidth }; });
 ok(hdr.o === 0, 'header controls do not overlap'); ok(hdr.sx <= hdr.cx, 'no horizontal scroll');
 // ---- persistence: turn some off, reload, the choices come back (menu, header text, drawing)
 await openMenu(); for (const k of ['labels', 'inset', 'handle']) await menuBtn(k).click({ position: { x: 20, y: 12 } }); await closeMenu();

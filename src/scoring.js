@@ -1,6 +1,6 @@
 // Proctor sheet: one sentence of lab-language feedback per miss.
 const fx = (x, n = 1) => (Math.round(x * 10 ** n) / 10 ** n).toFixed(n);
-export function computeScore(sim) {
+export function computeScore(sim, provisional = false) {
   const fl = sim.flags, rows = [];
   const row = (id, title, pass, result, feedback, major = false) => rows.push({ id, title, pass, result, feedback: pass ? '' : feedback, major });
   const depthRow = (id, title, h, side) => {
@@ -43,6 +43,9 @@ export function computeScore(sim) {
     8: { name: 'Nosecone out', rows: ['nose', 'wire'], what: 'withdrawing the open system over the fixed wire into the descending aorta, then closing the nosecone there' },
     9: { name: 'Close', rows: ['closure'], what: 'the access closure' },
   };
+  // ---- phases the learner went back to (Back button): informational only; misses that existed when going back are kept (no farming of a clean sheet)
+  for (const id in (fl.sticky || {})) { const r = rows.find(q => q.id === id); const st = fl.sticky[id]; if (r && r.pass) { r.pass = false; r.result = `${r.result} (earlier attempt: ${st.result})`; r.feedback = `${st.feedback} This was already a miss before you went back to an earlier phase, so it stays on the sheet.`; r.major = !!st.major; r.kept = true; } }
+  const wentBack = (fl.wentBack || []).map(q => ({ from: q.from, to: q.to, text: `Went back to phase ${q.to} (${SKIP[q.to].name}) from phase ${q.from}. Informational only: going back is not a miss, and earlier misses stay on the sheet.` }));
   const skipped = Object.keys(fl.skipped || {}).map(Number).filter(n => fl.skipped[n]).sort((a, b) => a - b).map(n => ({ phase: n, name: SKIP[n].name, rows: SKIP[n].rows, text: `Phase ${n} (${SKIP[n].name}) was skipped, so ${SKIP[n].what} was not assessed.` }));
   for (const sk of skipped) for (const id of sk.rows) {
     const r = rows.find(q => q.id === id); if (!r) continue;
@@ -60,5 +63,5 @@ export function computeScore(sim) {
   if (sim.v && sim.v.tugCount) bits.push(`${sim.v.tugCount} wire tug(s) used to let the valve descend.`);
   if (skipped.length) bits.unshift(`Skipped by learner: phase${skipped.length > 1 ? 's' : ''} ${skipped.map(q => q.phase).join(', ')}.`);
   const overall = majors ? `MAJOR miss recorded. ${passed}/${rows.length} sections passed. ` + bits.join(' ') : `${passed}/${rows.length} sections passed. ` + (passed === rows.length ? 'Clean case - good depth, aligned posts, full close. ' : 'Work through the misses above and run it again. ') + bits.join(' ');
-  return { rows, passed, total: rows.length, majors, overall, skipped };
+  return { rows, passed, total: rows.length, majors, overall, skipped, wentBack };
 }

@@ -29,6 +29,7 @@ export class UI {
     $('#btnLabels').addEventListener('click', () => this.setOverlay('parts', !V.overlay.parts));
     $('#btnSettings').addEventListener('click', () => { this.buildSettings(); $('#settingsModal').hidden = false; });
     $('#btnSkip').addEventListener('click', () => { if (this.sim.phase >= 9) this.sim.act.finishNow(); else this.sim.act.skipPhase(); this.refresh(); });
+    $('#btnBack').addEventListener('click', () => { this.sim.act.backPhase(); this.refresh(); });
     $('#btnReset').addEventListener('click', () => { this.sim.reset(true); this.sim.started = true; });
     $('#btnCut').addEventListener('click', () => { V.cutaway = !V.cutaway; $('#btnCut').textContent = 'Cutaway: ' + (V.cutaway ? 'on' : 'off'); $('#btnCut').classList.toggle('on', V.cutaway); });
     $('#zIn').addEventListener('click', () => { V.zoom = clamp(V.zoom * 1.25, 0.5, 4); });
@@ -80,6 +81,7 @@ export class UI {
     <details><summary class="ro">Show the ${PH.describeConstants().length} constants (all ${PH.ESTIMATE})</summary><div class="ro" style="font-size:11px;max-height:160px;overflow:auto">${PH.describeConstants().map(c => `<div><b>${c.name}</b> = ${c.value} ${c.unit} - ${c.meaning} <i>[${c.status}]</i></div>`).join('')}</div></details>
     <h4>Overlays</h4><p class="ro" style="font-size:12px">Use the <b>Overlays</b> menu in the header (and the <b>Labels</b> button on the 3D panel) to show or hide labels, readouts, the plan-view inset and the handle status text.</p>
     <h4>Keys</h4><p class="ro" style="font-size:12px">Arrows = C-arm (Shift = 5 deg) | W/S advance/withdraw (Shift fast) | Q/E rotate | F/G flex +/- | X/Z deploy/resheath (Shift fast) | I/K wire advance/pull | H hold wire | M macro slide | U unlock | P pacing | T wire tug | C aortogram</p>
+    <h4>Build</h4><p class="ro" style="font-size:12px" id="buildInfo">Build marker: <b id="buildMarkSettings">${(document.querySelector('meta[name=navitor-build]') || {}).content || 'dev'}</b> &middot; built ${(document.querySelector('meta[name=navitor-built]') || {}).content || ''}. If a colleague sees a different marker, one of you has a cached copy: hard-refresh (Ctrl/Cmd+Shift+R). The page also checks for a newer build when it loads and when you return to the tab.</p>
     <div class="row"><button id="stClose" class="primary">Done</button></div>`;
     sh.querySelector('#cfStiff').onchange = e => S.act.setCard({ wireStiffness: parseFloat(e.target.value) });
     sh.querySelector('#cfFast').onchange = e => S.act.setCard({ finalFast: e.target.checked });
@@ -309,7 +311,7 @@ export class UI {
     const S = this.sim, d = S.dev, vi = S.viewInfo();
     // stepper
     document.querySelectorAll('.chip').forEach(c => { const n = +c.dataset.p; const cls = 'chip ' + (n < S.phase || S.finished ? 'done' : n === S.phase ? 'active' : 'locked') + (n === S.phase + 1 && !S.finished ? ' next' : ''); if (c.className !== cls) c.className = cls; if (n === S.phase + 1 && !S.finished) c.title = 'Tap to skip phase ' + S.phase + ' and go to phase ' + n; else c.removeAttribute('title'); });
-    { const sb = $('#btnSkip'); const txt = S.phase >= 9 ? 'Finish / show score \u25B6' : 'Skip phase \u25B6'; if (sb.textContent !== txt) sb.textContent = txt; sb.disabled = !!S.finished; }
+    { const sb = $('#btnSkip'); const txt = S.phase >= 9 ? 'Finish / show score \u25B6' : 'Skip phase \u25B6'; if (sb.textContent !== txt) sb.textContent = txt; sb.disabled = !!S.finished; const bb = $('#btnBack'); const bd = !!S.finished || S.phase <= 1; if (bb.disabled !== bd) bb.disabled = bd; const bl = S.phase <= 1 ? 'Previous phase (not available in phase 1)' : `Go back to phase ${S.phase - 1}`; if (bb.getAttribute('aria-label') !== bl) { bb.setAttribute('aria-label', bl); bb.title = S.phase <= 1 ? 'Already at the first phase' : `Go back to phase ${S.phase - 1}: ${PHASES[S.phase - 2].name} (not a miss; earlier misses stay on the score sheet)`; } }
     const P = PHASES[S.phase - 1];
     this.setText('#phaseName', `Phase ${S.phase} of 9 - ${P.name}`);
     this.setText('#coachText', S.coach);
@@ -373,6 +375,7 @@ export class UI {
     const rows = sc.rows.map(r => `<tr><td><b>${r.title}</b></td><td class="${r.pass ? 'pass' : r.skipped ? 'miss skip' : 'miss'}">${r.pass ? 'PASS' : r.skipped ? 'SKIPPED' : 'MISS'}${r.major ? ' <span class="major">MAJOR</span>' : ''}</td><td>${r.result}${r.pass ? '' : `<div class="fb">&ldquo;${r.feedback}&rdquo;</div>`}</td></tr>`).join('');
     $('#sheet').innerHTML = `<h2>Proctor sheet</h2><div style="color:#9fb6d6;font-size:12.5px">Navitor Vision 27 mm / FlexNav - unofficial training model - ${Math.round(S.time)} s case time</div>
       <table id="scoreTable"><thead><tr><th>Section</th><th>Result</th><th>Detail and proctor feedback</th></tr></thead><tbody>${rows}</tbody></table>
+      ${sc.wentBack && sc.wentBack.length ? `<div id="backBox" class="skipbox backbox"><b>Went back (information only)</b><ul>${sc.wentBack.map(q => `<li>${q.text}</li>`).join('')}</ul></div>` : ''}
       ${sc.skipped && sc.skipped.length ? `<div id="skippedBox" class="skipbox"><b>Skipped by learner</b><ul>${sc.skipped.map(q => `<li>${q.text}</li>`).join('')}</ul></div>` : ''}
       <p id="overall"><b>Overall:</b> ${sc.overall}</p>
       <div class="row"><button id="scRetry" class="primary big">Retry / reset case</button><button id="scClose">Close</button></div>`;

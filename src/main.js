@@ -33,6 +33,21 @@ ack.addEventListener('change', () => { sb.disabled = !ack.checked; });
 sb.addEventListener('click', () => { if (ack.checked) start(); });
 requestAnimationFrame(frame);
 
+// ---- stale-build check: when served over http(s) compare our build marker with the one on the server (cache-busting fetch, no-store) ----
+const myBuild = (document.querySelector('meta[name=navitor-build]') || {}).content;
+async function checkBuild() {
+  if (!/^https?:/.test(location.protocol) || !myBuild) return;
+  try {
+    const r = await fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }); const t = await r.text();
+    const m = /<meta name="navitor-build" content="([^"]+)"/.exec(t);
+    if (m && m[1] !== myBuild) { document.getElementById('updBanner').hidden = false; window.__latestBuild = m[1]; }
+  } catch (e) { /* offline: ignore */ }
+}
+document.getElementById('updReload').addEventListener('click', () => { location.replace(location.pathname + '?v=' + (window.__latestBuild || Date.now())); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkBuild(); });
+setTimeout(checkBuild, 1500);
+window.__checkBuild = checkBuild;
+
 // ---- test / debug hook ----
 window.__sim = {
   sim, views, ui, world, THREE, errors,
