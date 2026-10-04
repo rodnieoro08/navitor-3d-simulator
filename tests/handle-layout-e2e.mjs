@@ -85,6 +85,10 @@ await page.evaluate(() => { __drv.goPhase1(); __drv.goDesc(); __drv.setRotation(
 await tab('handle'); o = await check(); report('locked 80%', o); ok(o.labels.some(s => /80% lock/.test(s)), 'lock hint present: ' + o.labels.find(s => /80% lock/.test(s))); await shotHandle('locked80');
 // ---- state 3: released (phase 8)
 await page.evaluate(() => { __drv.secondView(); __drv.release('fast'); }); await page.waitForTimeout(900); await tab('handle'); o = await check(); report('released', o); await shotHandle('released');
+ok(await page.evaluate(() => document.querySelector('#hMacro').dataset.macro) === 'locked' && /locked/i.test(await page.evaluate(() => document.querySelector('#mac1t').textContent)), 'released in the root: MACRO SLIDE shows its LOCKED state (button + handle diagram)');
+// ---- state 4: open system withdrawn into the descending aorta -> MACRO READY (visible enabled state)
+await page.evaluate(() => { const S = __sim.sim; S.act.toggleHold(); if (!S.wire.hold) S.act.toggleHold(); S.input = { wire: 1 }; let g = 0; while (S.wireAdv() < 0.6 && g++ < 400) S.update(1 / 30); S.input = {}; S.act.flexSet(0.15); __drv.withdrawOpen(); }); await page.waitForTimeout(900); await tab('handle'); o = await check(); report('macro ready', o); await shotHandle('macro-ready');
+ok(await page.evaluate(() => document.querySelector('#hMacro').dataset.macro) === 'ready' && /READY/.test(await page.evaluate(() => document.querySelector('#tMacro2').textContent)), 'descending aorta: MACRO SLIDE shows READY (button + handle diagram caption)');
 
 // ---- fluoro label overlap (phase 1/2 shows both 'Iliac plaque (Ca)' and 'Wire'; also the root labels later)
 const labelCheck = async (name) => {

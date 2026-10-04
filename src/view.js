@@ -210,7 +210,7 @@ export class Views {
         }
         L.push(`Post offset: ${S.alignErr().toFixed(0)} deg   centre: ${d.lat.toFixed(1)} mm`);
       }
-      if (S.phase === 8) L.push(`Nosecone offset: ${d.lat.toFixed(1)} mm   closed: ${(d.macro * 100).toFixed(0)}%`);
+      if (S.phase === 8) { L.push(`Nosecone offset: ${d.lat.toFixed(1)} mm   closed: ${(d.macro * 100).toFixed(0)}%`); const ms = S.macroState(); L.push(ms === 'locked' ? 'Withdraw the OPEN system to the descending aorta' : ms === 'ready' ? 'Descending aorta: close the nosecone (macro)' : ms === 'closed' ? 'Nosecone closed: withdraw out the iliac' : 'Nosecone: withdraw out'); }
       L.forEach(s => { txt(s, px(8), y); y += px(18); });
     }
     // parallax meter + angles

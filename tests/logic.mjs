@@ -140,15 +140,31 @@ console.log('== MICRO wheel = fine recapture only ==');
   b.act.setPacing('120'); up(b, 0.1); ok(b.v.bounceAmp < bad * 0.6, 'pacing 120 reduces root bounce'); }
 console.log('== phase 8/9 ==');
 function toPhase8() { const s = toLockedPhase6(); D.secondView(); D.release('fast'); return s; }
-{ const s = toPhase8(); ok(s.phase === 8 && s.dev.released, 'released -> phase 8'); s.act.toggleHold(); s.input = { macro: 1 }; up(s, 1); s.input = {}; ok(s.dev.macro > 0, 'macro slide works after release');
-  const m = s.dev.macro; s.act.setHold(true); s.input = { adv: -1 }; up(s, 1); ok(s.dev.macro >= m && s.phase === 8, 'cannot withdraw until closed'); }
-{ const s = toPhase8(); s.act.setHold(true); s.input = { macro: 1 }; up(s, 4); s.input = {}; ok(s.dev.macro >= 1, 'macro closed'); D.autoFlex(-8); s.dev.lat = 0;
-  // off-centre: nosecone not centred (no wire advance, flex off)
-  s.act.flexSet(0.9); s.input = { adv: -1 }; let g = 0; while (!s.fx && g++ < 3000 && s.dev.s > P.lm.ann - 30) { s.update(dt); }
-  ok(s.fx && s.fx.type === 'frameCatch', 'withdrawing OFF-CENTRE catches the frame -> fail: ' + (s.fx && s.fx.type + ' lat ' + s.dev.lat.toFixed(1))); }
-{ const s = toPhase8(); s.act.setHold(true); s.input = { adv: -1 }; let g = 0; while (!s.fx && g++ < 3000) s.update(dt); ok(s.fx && s.fx.type === 'frameCatch', 'withdrawing with the nosecone NOT closed catches the frame: ' + (s.fx && s.fx.type)); waitRetry(s); ok(s.dev.macro === 0 || true, 'retry'); }
-{ const s = toPhase8(); s.act.setHold(false); s.input = { macro: 1 }; up(s, 4); s.input = { adv: -1 }; let g = 0; while (!s.fx && g++ < 3000) s.update(dt); ok(s.fx && (s.fx.type === 'wirePulled' || s.fx.type === 'frameCatch'), 'wire not held -> wire pulled out with the device / frame catch: ' + (s.fx && s.fx.type)); }
-{ const s = toPhase8(); s.act.setHold(false); s.input = { macro: 1 }; up(s, 4); s.input = {}; s.act.setHold(false); s.dev.lat = 0; s.dev.s = s.dev.valveS - 2 + 40; s.input = { adv: -1 }; let g = 0; while (!s.fx && g++ < 4000 && s.dev.s > P.lm.ann - 100) s.update(dt); ok(s.fx && s.fx.type === 'wirePulled', 'wire pulled with the device -> wirePulled: ' + (s.fx && s.fx.type)); ok(s.flags.wirePulled > 0, 'flag recorded'); }
+// ---- v12 ordering rule: withdraw the OPEN system into the descending aorta first, close the nosecone (macro) only there
+{ const s = toPhase8(); ok(s.phase === 8 && s.dev.released, 'released -> phase 8'); ok(s.macroState() === 'locked' && !s.descOk(), 'phase 8 start: system in the root, MACRO slide LOCKED');
+  ok(/Keep the wire FIXED/.test(s.coach) && /OPEN nosecone/.test(s.coach) && /descending aorta/.test(s.coach) && /locked/i.test(s.coach), 'phase 8 coach line: withdraw the open system into the descending aorta, macro locked');
+  s.act.toggleHold(); s.input = { macro: 1 }; up(s, 1); s.input = {}; ok(s.dev.macro === 0, 'MACRO close is REFUSED while the system is in the root (macro stays 0)'); ok(s.flags.macroEarly >= 1, 'early closure attempt recorded as a scored miss (macroEarly ' + s.flags.macroEarly + ')');
+  ok(/Withdraw the open system into the descending aorta before closing the nosecone/.test(s.note), 'refusal coach line: "' + s.note + '"'); s.act.macroTry(); ok(s.flags.macroEarly >= 2, 'macroTry() in the root also refused and counted'); }
+{ const s = toPhase8(); s.act.toggleHold(); const D0 = s.dev.s; s.input = { wire: 1 }; let g = 0; while (s.wireAdv() < 0.6 && g++ < 400) s.update(dt); s.input = {}; s.act.flexSet(0.15);
+  // arch and ascending aorta: macro stays locked all the way back to the descending aorta
+  let lockedAll = true, sawArch = false, minOpen = 1; s.input = { adv: -1 }; g = 0; while (!s.descOk() && g++ < 20000) { D.autoFlex(-8); s.update(dt); if (s.fx) break; if (s.dev.s < P.lm.ann - 100 && s.dev.s > P.lm.archStart) sawArch = true; if (!s.descOk() && s.macroState() !== 'locked') lockedAll = false; minOpen = Math.min(minOpen, 1 - s.dev.macro); } s.input = {};
+  ok(!s.fx && s.descOk() && s.dev.macro === 0 && s.phase === 8, 'withdrawing the OPEN system back through the valve and the arch works over the fixed wire (no failure, nosecone still open), now at s=' + s.dev.s.toFixed(0) + ' (descending aorta <= ' + (P.lm.archStart - 25) + ')');
+  ok(lockedAll && sawArch, 'MACRO stayed locked through the root, ascending aorta and arch'); ok(s.macroState() === 'ready', 'in the descending aorta the MACRO slide is READY');
+  ok(/descending aorta, clear of the arch: now close the nosecone/.test(s.coach), 'coach line changes to "close the nosecone now"'); ok(!s.flags.macroEarly, 'no early closure miss for a correct run');
+  s.input = { macro: 1 }; up(s, 1); const m1 = s.dev.macro; ok(m1 > 0 && m1 < 1, 'MACRO closing works in the descending aorta (macro ' + m1.toFixed(2) + ')');
+  const sNow = s.dev.s; s.input = { adv: -1, macro: 0 }; up(s, 1); ok(s.dev.s >= sNow - 1e-6 && s.phase === 8, 'cannot withdraw while the nosecone is half closed'); s.input = { macro: 1 }; up(s, 4); s.input = {}; ok(s.dev.macro >= 1 && s.macroState() === 'closed', 'macro closed in the descending aorta');
+  ok(/Nosecone closed/.test(s.coach), 'coach after closure: withdraw the closed system out the iliac'); }
+{ const s = toPhase8(); s.act.toggleHold(); s.input = { wire: 1 }; let g = 0; while (s.wireAdv() < 0.6 && g++ < 400) s.update(dt); s.input = {}; s.act.flexSet(0.15);
+  s.input = { adv: -1 }; g = 0; while (!s.fx && s.dev.s > P.lm.bif - 60 && g++ < 30000) { D.autoFlex(-8); s.update(dt); } s.input = {};
+  ok(!s.fx && s.dev.s >= P.lm.bif + 19 && s.dev.macro === 0, 'an OPEN nosecone is stopped in the descending aorta (cannot enter the iliac open): s=' + s.dev.s.toFixed(0)); ok(/close the nosecone with the MACRO slide/.test(s.note), 'stop coach line: ' + s.note); }
+{ const s = toPhase8(); s.act.setHold(true); s.act.flexSet(0.9); s.input = { adv: -1 }; let g = 0; while (!s.fx && g++ < 3000 && s.dev.s > P.lm.ann - 30) { s.update(dt); }
+  ok(s.fx && s.fx.type === 'frameCatch', 'pulling the OPEN nosecone back through the valve OFF-CENTRE catches the frame -> fail: ' + (s.fx && s.fx.type + ' lat ' + s.dev.lat.toFixed(1))); waitRetry(s); ok(s.phase === 8 && s.dev.macro === 0, 'retry: back in front of the valve with the nosecone open'); }
+{ const s = toPhase8(); s.act.setHold(false); s.input = { adv: -1 }; let g = 0; while (!s.fx && g++ < 3000) { D.autoFlex(-8); s.update(dt); } ok(s.fx && (s.fx.type === 'wirePulled' || s.fx.type === 'frameCatch'), 'wire not held -> wire pulled out with the device / frame catch: ' + (s.fx && s.fx.type)); }
+{ const s = toPhase8(); s.act.setHold(false); s.input = {}; s.dev.lat = 0; s.dev.s = s.dev.valveS - 2 + 40; s.input = { adv: -1 }; let g = 0; while (!s.fx && g++ < 4000 && s.dev.s > P.lm.ann - 100) s.update(dt); ok(s.fx && s.fx.type === 'wirePulled', 'wire pulled with the device -> wirePulled: ' + (s.fx && s.fx.type)); ok(s.flags.wirePulled > 0, 'flag recorded'); }
+// early closure is a scored miss on the nosecone row (and the case can still be finished)
+{ const s = toPhase8(); s.input = { macro: 1 }; up(s, 1); s.input = {}; ok(s.dev.macro === 0 && s.flags.macroEarly >= 1, 'early closure attempt refused'); D.phase8(); ok(s.phase === 9, 'then the correct withdrawal still completes (phase ' + s.phase + ')'); D.phase9();
+  const r = s.score && s.score.rows.find(x => x.id === 'nose'); ok(s.finished && r && !r.pass && /early nosecone closure/.test(r.result) && /descending aorta/.test(r.feedback), 'score sheet: nosecone row is a MISS for the early closure attempt: ' + (r && r.result + ' | ' + r.feedback)); }
+{ const s = toPhase8(); D.phase8(); D.phase9(); const r = s.score.rows.find(x => x.id === 'nose'); ok(r.pass && /descending aorta/.test(r.result), 'correct order: nosecone row passes ("' + r.result + '")'); }
 { const s = fresh(); s.act.macroTry(); ok(s.flags.macroWrong > 0, 'macro slide before release is rejected'); const t = toLockedPhase6(); t.input = { macro: 1 }; up(t, 1); ok(t.dev.macro === 0 && t.flags.macroWrong > 0, 'macro slide before release has no effect, coaching'); }
 // full happy path
 console.log('== happy path ==');
@@ -215,7 +231,7 @@ console.log('== Skip phase button ==');
   s.act.skipPhase(); ok(s.phase === 6 && s.dev.locked && Math.abs(s.dev.f - 0.8) < 0.006 && !s.chk.secondView && !s.fx, 'skip 5 -> 6: 80% locked (f=' + s.dev.f.toFixed(3) + ')'); ok(s.dev.h > 0 && s.dev.h < 12, 'valve physics state is real (NCC depth ' + s.dev.h.toFixed(1) + ' mm)');
   s.act.skipPhase(); ok(s.phase === 7 && !s.dev.locked && Math.abs(s.dev.f - 0.8) < 0.006 && !s.flags.major80, 'skip 6 -> 7: unlocked at 80%, no MAJOR from the button');
   s.act.skipPhase(); ok(s.phase === 8 && s.dev.released && s.dev.f === 1 && !s.fx, 'skip 7 -> 8: released at 100%'); ok(!s.flags.releasedFast, 'skip used the safe wheel speed');
-  s.act.macro && 0; run(s, { macro: 1 }, 5); ok(s.dev.macro >= 1, 'after skipping to 8 the macro slide closes the nosecone');
+  run(s, { macro: 1 }, 5); ok(s.dev.macro === 0 && s.flags.macroEarly >= 1 && s.macroState() === 'locked', 'after skipping to 8 the system is in the root with the nosecone open: the macro slide is refused (locked) and counted as an early closure');
   s.act.skipPhase(); ok(s.phase === 9 && s.wire.hold && s.dev.macro === 1 && !s.flags.hemostasis && !s.finished, 'skip 8 -> 9: wire fixed, nosecone closed, closure undone');
   ok(s.act.skipPhase() === false && s.phase === 9, 'no skip in phase 9');
   s.act.finishNow(); ok(s.finished && s.score, 'Finish / show score ends in the score sheet');

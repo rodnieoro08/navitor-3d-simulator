@@ -89,7 +89,13 @@ await tab('handle'); await page.waitForTimeout(1200); ok(await page.isDisabled('
   for (let a = 0; a >= -90; a -= 6) { await page.mouse.move(cx2 + r2 * Math.cos(a * Math.PI / 180), cy2 + r2 * Math.sin(a * Math.PI / 180)); await page.waitForTimeout(30); } await page.mouse.up(); }
 s = await st(); console.log(JSON.stringify([s.phase, s.fx, s.flags.nosecWheelTry, s.note]));ok(s.dev.f === 1 && s.dev.macro === 0 && s.flags.nosecWheelTry > 0, 'dragging the DEPLOYMENT WHEEL back never recaptures the nosecone (f=' + s.dev.f + ' macro=' + s.dev.macro + ', coaching: ' + (s.note || '').slice(0, 70) + ')');
 // macro via real hold
-await holdBtn('#hMacro', 1500); s = await st(); ok(s.dev.macro > 0.2, 'macro slide hold closes nosecone (macro ' + s.dev.macro + ')');
+await tab('handle'); await page.waitForTimeout(300);
+ok(await page.evaluate(() => document.querySelector('#hMacro').dataset.macro) === 'locked' && /LOCKED/.test(await page.innerText('#hMacro')), 'macro button shows LOCKED in the root: "' + (await page.innerText('#hMacro')) + '"');
+await holdBtn('#hMacro', 1500); s = await st(); ok(s.dev.macro === 0 && s.flags.macroEarly > 0 && /descending aorta/.test(s.note || ''), 'real macro hold in the root is refused with a coach line (macro ' + s.dev.macro + ', early ' + s.flags.macroEarly + '): ' + s.note);
+await page.evaluate(() => { const S = __sim.sim; S.act.toggleHold(); if (!S.wire.hold) S.act.toggleHold(); __drv.up(1); S.input = { wire: 1 }; let g = 0; while (S.wireAdv() < 0.6 && g++ < 400) S.update(1 / 30); S.input = {}; S.act.flexSet(0.15); __drv.withdrawOpen(); });
+await page.waitForTimeout(500); s = await st(); ok(s.phase === 8 && s.dev.macro === 0 && !s.fx, 'open system withdrawn into the descending aorta (s ' + s.dev.s + ', nosecone still open)');
+ok(await page.evaluate(() => document.querySelector('#hMacro').dataset.macro) === 'ready' && /READY/.test(await page.innerText('#hMacro')), 'macro button now READY: "' + (await page.innerText('#hMacro')) + '"');
+await holdBtn('#hMacro', 1500); s = await st(); ok(s.dev.macro > 0.2, 'macro slide hold closes nosecone in the descending aorta (macro ' + s.dev.macro + ')');
 await page.evaluate(() => __drv.phase8()); s = await st(); ok(s.phase === 9, 'withdrawn out of iliac -> phase 9');
 await tab('imaging');
 ok(await page.isDisabled('#bHemo') && await page.isDisabled('#bPre'), 'hemostasis + preclose disabled until aortogram / wire out'); await page.evaluate(() => __sim.sim.act.hemostasis()); ok(!(await st()).finished, 'hemostasis refused too early (API)'); await page.waitForTimeout(2500);

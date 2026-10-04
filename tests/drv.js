@@ -17,8 +17,14 @@ window.__drv = (() => {
   const toLock = () => { deployTo(0.8); };
   const secondView = () => { S().act.setCarm(32, 30); S().act.confirmSecondView(); return S().chk.secondView; };
   const release = (pace = 'fast') => { const s = S(); s.act.unlock(); if (pace) s.act.setPacing(pace); s.input = { deploy: 1 }; let g = 0; while (s.phase === 7 && g++ < 9000) s.update(dt); s.input = {}; return s.phase; };
-  const phase8 = () => { const s = S(); s.act.toggleHold(); s.input = { wire: 1 }; let g = 0; while (s.wireAdv() < 0.6 && g++ < 400) s.update(dt); s.input = {}; s.act.flexSet(0.15); s.input = { macro: 1 }; g = 0; while (s.dev.macro < 1 && g++ < 600) s.update(dt); s.input = {};
+  // phase 8 (v12 order): wire fixed + advanced, centre the OPEN nosecone, withdraw the whole open system through the valve and the arch into the descending aorta,
+  // close the nosecone there with the macro slide, then withdraw out the iliac.
+  const withdrawOpen = () => { const s = S(); s.input = { adv: -1 }; let g = 0; while (s.phase === 8 && !s.descOk() && g++ < 20000) { autoFlex(-8); s.update(dt); if (s.fx) break; } s.input = {}; return s.descOk(); };
+  const phase8 = () => { const s = S(); if (!s.wire.hold) s.act.toggleHold(); s.input = { wire: 1 }; let g = 0; while (s.wireAdv() < 0.6 && g++ < 400) s.update(dt); s.input = {}; s.act.flexSet(0.15);
+    withdrawOpen();
+    if (s.fx) return s.phase;
+    s.input = { macro: 1 }; g = 0; while (s.dev.macro < 1 && g++ < 600) s.update(dt); s.input = {};
     s.input = { adv: -1 }; g = 0; while (s.phase === 8 && g++ < 20000) { autoFlex(-8); s.update(dt); if (s.fx) break; } s.input = {}; return s.phase; };
   const phase9 = () => { const s = S(); s.act.aortogram('root'); s.act.removeWire(); s.act.aortogram('iliac'); s.act.preclose(); s.act.preclose(); s.act.hemostasis(); return s.finished; };
-  return { up, autoFlex, goPhase1, goDesc, setRotation, goArch, goCross, alignAt, press, deployTo, resheathTo, toLock, secondView, release, phase8, phase9 };
+  return { up, autoFlex, goPhase1, goDesc, setRotation, goArch, goCross, alignAt, press, deployTo, resheathTo, toLock, secondView, release, withdrawOpen, phase8, phase9 };
 })();

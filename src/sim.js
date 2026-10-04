@@ -25,7 +25,7 @@ export const COACH = {
   5: 'Cusp overlap, parallax gone: NCC alone on the left, pigtail at the NCC nadir. Watch only the NCC. Slow wheel, inflow first. Forward pressure on the system, a little pull on the wire. (Resheathing? The MICRO wheel is for fine recapture only.)',
   6: 'Lock engaged at 80%. Recapture still works (MICRO wheel = fine recapture only). Leave cusp overlap, apply the 3-cusp plan, kill parallax, read the LEFT cusp side (ignore the NCC), confirm both depths and the posts.',
   7: 'Unlock and finish the wheel slowly - speed after 80% still matters. Use the pacing the case card asks for. Leaflets open, cuff seals.',
-  8: 'Fix the wire, advance it, centre the nosecone in the frame, close the tip with the MACRO slide (not the deployment or MICRO wheel), then withdraw across the arch and out the iliac holding the wire.',
+  8: 'Keep the wire FIXED across the valve (it is the rail). Centre the OPEN nosecone and withdraw the whole system, nosecone still open, back through the valve and the arch into the descending aorta. Only there close the tip with the MACRO slide (not the deployment or MICRO wheel), then keep withdrawing out the iliac holding the wire.',
   9: 'Completion aortogram (PVL, coronary fill, depth; the Inject contrast button counts once the valve is released), iliac/femoral angiogram, two preclose devices, then hemostasis. The case is not over at release.',
 };
 const FX_TEXT = {
@@ -36,7 +36,7 @@ const FX_TEXT = {
   hardRot: ['Shaft winds up and the markers jump.', 'That is rotation against resistance. Stop, back off, rotate the short way (< 60 deg) and slowly.'],
   scrapeArch: ['System rides the greater curve of the arch; wire straightens.', 'Stay central on the wire. Flex earlier so the capsule follows the horizontal aorta.'],
   apex: ['Wire tip is jammed at the LV apex; ectopy on the monitor.', 'Hold the wire when you cross. Pull it back to a soft curve in the LV.'],
-  frameCatch: ['Nosecone snags the valve frame; valve jolts.', 'Do not withdraw an open or off-centre nosecone. Advance the wire, centre the tip, close it with the macro slide.'],
+  frameCatch: ['Nosecone snags the valve frame; valve jolts.', 'Do not pull an off-centre nosecone back through the valve. Keep the wire fixed and advanced, flex to centre the open tip on the wire, then withdraw slowly. Close the nosecone later, in the descending aorta.'],
   wirePulled: ['Wire comes back with the system; tip leaves the LV.', 'You pulled the wire with the system. Fix the wire, then withdraw.'],
   closure: ['The angiogram shows the access site is not sealed yet.', 'Hemostasis needs both preclose devices and a clean angiogram first.'],
 };
@@ -97,6 +97,10 @@ export class Sim {
     if (this.phase === 4 && this.p4Ready()) c = COACH[4] + ' Crossed, centred and on the plane: confirm the commissure alignment (recommended). You may also continue without it (press Skip alignment check, or just start the wheel): that is a scored miss on the alignment row.';
     if (this.phase === 5 && (this.flags.alignSkipped || this.flags.skipNoCross || this.flags.skipNoCentre || this.flags.skipNoMarker)) { const m = []; if (this.flags.alignSkipped) m.push('the alignment re-check at the annulus'); if (this.flags.skipNoCross) m.push('crossing the valve'); if (this.flags.skipNoCentre) m.push('centring the shaft'); if (this.flags.skipNoMarker) m.push('putting the marker on the annular plane'); c = COACH[5] + ' NOTE: you skipped ' + m.join(', ') + ' - scored as a miss.' + ((this.flags.skipNoCross || this.flags.skipNoCentre || this.flags.skipNoMarker) ? ' Unsheathing stays locked out until the valve is crossed, centred and the inner-shaft marker is on the annular plane (and the view is cusp overlap).' : ''); }
     if (this.phase === 7) c = 'Unlocked - past the point of no return. Finish slowly: turn the deployment wheel clockwise (or hold Deploy slow, or drag the slider) up to 100%. Rapid pacing for the final release only if the case card says so. Speed after 80% still matters.';
+    if (this.phase === 8) { const st = this.macroState();
+      if (st === 'locked') c = 'Release done. Keep the wire FIXED across the valve and centre the OPEN nosecone on it, then withdraw the whole system (nosecone still open) back through the valve and the arch into the descending aorta. The MACRO slide is locked until you are there.';
+      else if (st === 'ready') c = 'You are in the descending aorta, clear of the arch: now close the nosecone with the MACRO slide (hold it), then keep the wire fixed and withdraw out the iliac.';
+      else if (st === 'closed') c = 'Nosecone closed. Keep the wire fixed and withdraw the closed system out the iliac to the access site.'; }
     if (this.lastSkip && this.lastSkip.to === this.phase && !this.finished) c += ` (Phase ${this.lastSkip.from} was skipped by you and is marked on the score sheet.)`;
     this.coach = c;
   }
@@ -197,7 +201,7 @@ export class Sim {
     const d = this.dev, v = this.v;
     if (this.phase === 4 && df > 0 && this.p4Ready()) { this.proceedToLanding(); }
     if (this.phase < 5) { this.say('Not yet: unsheathing is only allowed in phases 5-7.', 3); this.flags.wheelWrong++; return false; }
-    if (this.phase === 8 || this.phase === 9) { this.flags.nosecWheelTry++; this.say('The deployment wheel never recaptures the nosecone. Use the macro slide to close the tip.', 5); this.log('wheelForNose'); return false; }
+    if (this.phase === 8 || this.phase === 9) { this.flags.nosecWheelTry++; this.say('The deployment wheel never recaptures the nosecone. Use the macro slide to close the tip - in the descending aorta, after withdrawing the open system.', 5); this.log('wheelForNose'); return false; }
     if (df > 0) {
       if (v.resheathing && d.f > v.minF + 0.004) {
         if (v.deepAtResheath) { if (v.minF > 0.06) { this.flags.partialDeepRecapture++; this.log('partialDeepRecapture', { minF: +v.minF.toFixed(2) }); this.say('Wrong lesson: a deep valve needs a FULL recapture and a new approach, not a partial one.', 9); } else { this.flags.fullRecapture++; this.log('fullRecapture'); } }
@@ -373,7 +377,8 @@ export class Sim {
     this.say('Both sides and commissures confirmed in the 3-cusp view. You may unlock.', 6);
   }
   macroTry() { // used by the on-screen button as a one-shot (hold is via input.macro)
-    if (this.dev.f < 1) { this.flags.macroWrong++; this.say('Macro slide closes the nosecone ONLY after the valve is released.', 4); }
+    if (this.dev.f < 1) { this.flags.macroWrong++; this.say('Macro slide closes the nosecone ONLY after the valve is released.', 4); return; }
+    if (this.phase === 8 && this.dev.macro < 1 && !this.descOk()) { this.flags.macroEarly = (this.flags.macroEarly || 0) + 1; this.log('macroEarly'); this.say('Withdraw the open system into the descending aorta before closing the nosecone.', 6); }
   }
   aortogram(where) {
     if (this.fx) return;
@@ -456,6 +461,7 @@ export class Sim {
     if (ph >= 5 && ph <= 7 && d.f > 0.55) return;
     if (ph === 9) return;
     if (ph === 8 && d.macro > 0 && d.macro < 1 && ds < 0) { this.say('Finish closing the nosecone first.', 3); return; }
+    if (ph === 8 && ds < 0 && d.macro < 1 && d.s + ds < this.lm.bif + 20) { if (!this.openStopMsg || this.time - this.openStopMsg > 2) { this.openStopMsg = this.time; this.say('Stop in the descending aorta and close the nosecone with the MACRO slide before the open tip goes into the iliac.', 5); } return; }
     let ns = d.s + ds;
     const mx = this.maxS();
     if (ns > mx) {
@@ -465,7 +471,7 @@ export class Sim {
     if (ph === 8 && ds < 0) { // frame catch check at the inflow plane
       const vs = d.valveS;
       if (d.s > vs - 0.0 && ns <= vs) {
-        if (d.macro < 0.97 || Math.abs(d.lat) > 2.5) {
+        if (Math.abs(d.lat) > 2.5) {   // the OPEN tip is pulled back through the valve: it must be centred on the wire (flex) or it catches the frame / leaflets
           this.flags.frameCatch = (this.flags.frameCatch || 0) + 1;
           this.fail('frameCatch', { s: vs, tag: 'frame', retry: () => { d.s = vs + DEV.noseL + 8; d.macro = 0; } });
           return;
@@ -500,6 +506,9 @@ export class Sim {
     }
   }
   inIliac() { return this.dev.s < this.lm.bif + 40; }
+  // phase 8 ordering rule: the OPEN system is withdrawn through the valve, the arch and into the descending aorta; only there is the nosecone closed (macro slide).
+  descOk() { return this.dev.s <= this.lm.archStart - 25; }          // nosecone tip distal to the arch -> the whole capsule is in the descending aorta
+  macroState() { const d = this.dev; if (this.phase !== 8 || !d.released || d.f < 1) return 'off'; if (d.macro >= 1) return 'closed'; return this.descOk() ? 'ready' : 'locked'; }
   zoneCheck(moving, dt) {
     const d = this.dev, lm = this.lm, path = this.path, ph = this.phase;
     const s = d.s, I = this.input;
@@ -596,8 +605,12 @@ export class Sim {
     const d = this.dev;
     if (this.phase !== 8 || d.f < 1) { if (!this.macroMsg || this.time - this.macroMsg > 2) { this.macroMsg = this.time; this.flags.macroWrong++; this.say('Macro slide is only for closing the nosecone after release.', 4); } return; }
     if (d.macro >= 1) return;
+    if (!this.descOk()) { // refused: the open system must first be withdrawn into the descending aorta (a scored miss if you try)
+      if (!this.macroMsg || this.time - this.macroMsg > 2) { this.macroMsg = this.time; this.flags.macroEarly = (this.flags.macroEarly || 0) + 1; this.log('macroEarly'); this.say('Withdraw the open system into the descending aorta before closing the nosecone. Keep the wire fixed and pull back through the valve and the arch first.', 6); }
+      return;
+    }
     d.macro = Math.min(1, d.macro + 0.33 * dt);
-    if (d.macro >= 1) { this.flags.phase8Closed = true; this.say('Nosecone closed against the capsule. Check the wire is fixed, then withdraw.', 5); }
+    if (d.macro >= 1) { this.flags.phase8Closed = true; this.say('Nosecone closed against the capsule in the descending aorta. Check the wire is fixed, then keep withdrawing out the iliac.', 5); }
   }
   updateValve(dt) {
     const d = this.dev, v = this.v, lm = this.lm, ph = this.phase;
@@ -700,9 +713,10 @@ export class Sim {
     if (ph === 5 && d.locked) { this.chk.secondView = false; this.setPhase(6); }
     if (ph === 6 && !d.locked && d.f < 0.78) { this.setPhase(5); this.chk.secondView = false; this.say('Back to landing - recaptured below 80%.', 4); }
     if (ph === 6) { /* confirm via button */ }
-    if (ph === 8 && d.s <= lm.cfa - 4 && d.f >= 1) {
+    if (ph === 8 && d.s <= lm.cfa - 4 && d.f >= 1 && d.macro >= 1) {
       this.wire.hold = true; d.s = Math.min(d.s, lm.skin - 3); this.setPhase(9); this.flags.phase8Done = true; this.say('FlexNav is out with the wire in place. Now close.', 6);
     }
+    if (ph === 8) { const st = this.macroState(); if (st !== this.p8stage) { const first = this.p8stage == null; this.p8stage = st; this.setCoach(); if (!first && st === 'ready') this.say('Descending aorta reached: the MACRO slide is now enabled - close the nosecone.', 6); this.log('p8stage', { stage: st }); } }
     if (ph === 8 && this.pacing !== 'off') { this.pacing = 'off'; }
   }
   snapshot() {
