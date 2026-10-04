@@ -22,6 +22,8 @@ const lay = await page.evaluate((ids) => ({ sy: scrollY, vh: innerHeight, tab: d
 ok(lay.tab === 'Handle', 'Handle tab is open in phase 5'); ok(lay.sy === 0, 'page not scrolled'); 
 ok(lay.r.every(q => q.h >= 56 && q.w >= 56), 'all five touch buttons are >= 56 px: ' + lay.r.map(q => Math.round(q.w) + 'x' + Math.round(q.h)).join(' '));
 ok(lay.r.every(q => q.y >= 0 && q.b <= lay.vh && q.x >= 0 && q.r <= 390), `all visible without scrolling (lowest bottom ${Math.round(Math.max(...lay.r.map(q => q.b)))} of ${lay.vh})`);
+{ const z = await page.evaluate(() => { const m = document.querySelector('#mDep').getBoundingClientRect(), v = document.querySelector('#hsvg').getBoundingClientRect(), w = document.querySelector('#wheelRing').getBoundingClientRect(); return { gap: v.top - m.bottom, w: w.width, edge: v.left <= 6 && innerWidth - v.right <= 6 }; });
+  ok(z.gap >= -1 && z.gap < 24, `the large handle diagram is directly beneath the touch block (gap ${z.gap.toFixed(0)} px)`); ok(z.w >= 150 && z.edge, `diagram edge to edge with a ${z.w.toFixed(0)} px wheel`); }
 ok(lay.first, 'the touch block comes before Deploy slow / the wheel / the speed text'); ok(lay.sx <= lay.cx, 'no horizontal scroll');
 ok(lay.r[0].t === 'Hold to deploy (slow)' && lay.r[1].t === 'Hold to resheath' && lay.r[2].t === 'Tap to deploy: +2 mm' && lay.r[3].t === 'Tap to resheath: -2 mm', 'labels: ' + lay.r.slice(0, 4).map(q => q.t).join(' | '));
 const us = await page.evaluate((ids) => ids.map(s => { const c = getComputedStyle(document.querySelector(s)); return (c.userSelect || c.webkitUserSelect) + '/' + c.webkitTouchCallout + '/' + c.touchAction; }), ID);

@@ -12,7 +12,7 @@ export class UI {
     this.sim = sim; this.views = views; this.W = world; this.keys = {}; this.cache = {}; this.stepSize = 1;
     this.buildStepper(); this.buildControls(); this.buildHandle(); this.buildLegend(); this.buildOverlayMenu(); this.bindHeader(); this.bindKeys(); this.bindModal();
     sim.on((ev, data) => this.onSim(ev, data));
-    const mq = window.matchMedia('(max-width:900px)'); const upd = () => { $('#app').classList.toggle('mobile', mq.matches); }; mq.addEventListener('change', upd); upd();
+    const mq = window.matchMedia('(max-width:900px)'); const upd = () => { $('#app').classList.toggle('mobile', mq.matches); if (this.handleMobile !== undefined && this.handleMobile !== mq.matches) { this.buildHandle(); this.refreshAll(); } }; mq.addEventListener('change', upd); upd();
     this.setTab('system'); $('#app').dataset.vt = 'mon';
   }
   onSim(ev, data) {
@@ -184,29 +184,49 @@ export class UI {
     document.querySelectorAll('#legend button').forEach(b => b.classList.toggle('hl', b.dataset.p === (this.views.legendPart || id)));
     const pi = $('#partinfo'); if (id && PARTS[id]) { pi.style.display = 'block'; pi.innerHTML = `<b>${PARTS[id].name}</b> - ${PARTS[id].info}`; } else pi.style.display = 'none';
   }
+  // Handle diagram geometry. Phones (<= 900 px) get a portrait layout that fills the width (wheel >= 150 px across at 360 px wide), desktop a moderately larger landscape one.
+  get hP() { return this.handleMobile ? {
+      vb: [360, 524], title: { x: 8, y: 16, fs: 13 }, house: { x: 2, y: 24, w: 356, h: 210, rx: 40 },
+      wheel: { cx: 90, cy: 129, R: 78, hit: 88 }, cap1: { y: 256, y2: 273, fs: 12.5, fs2: 12.5 },
+      micro: { cx: 269, cy: 86, r: 38, mb: { y: 138, h: 50, x1: 184, w1: 80, x2: 272, w2: 82 } },
+      macro: { x1: 4, x2: 186, y: 288, w: 170, h: 62, fs: 13, fs2: 12.5, capY: 372, capY2: 389 },
+      lock: { tx: 18, ty: 436, head: -20, hfs: 13, h: 32, white: 220, gray: 108, tfs: 13, ty1: 21, fillH: 8, caret: 'M0 42 l-8 12 h16z', icon: 'translate(220 -3) scale(1.7)', hintY: 80, hfs2: 12.5 } }
+    : {
+      vb: [430, 334], title: { x: 8, y: 16, fs: 12 }, house: { x: 6, y: 26, w: 418, h: 158, rx: 48 },
+      wheel: { cx: 84, cy: 105, R: 62, hit: 72 }, cap1: { y: 204, y2: 221, fs: 10.5, fs2: 10 },
+      micro: { cx: 228, cy: 80, r: 29, mb: { y: 122, h: 32, x1: 188, w1: 38, x2: 232, w2: 38 } },
+      macro: { x1: 294, x2: 294, y: 36, w: 124, h: 60, fs: 11, fs2: 11, capY: 204, capY2: 221, stack: true },
+      lock: { tx: 20, ty: 262, head: -12, hfs: 12, h: 24, white: 288, gray: 112, tfs: 11.5, ty1: 16, fillH: 6, caret: 'M0 32 l-6 9 h12z', icon: 'translate(288 -2) scale(1.1)', hintY: 62, hfs2: 11.5 } }; }
+  handleSvg(mob) {
+    const P = this.hP, W = P.wheel, Mi = P.micro, Mc = P.macro, L = P.lock, k = W.R / 56, km = Mi.r / 28, C = P.cap1, mb = Mi.mb;
+    const mx2 = Mc.stack ? Mc.x1 : Mc.x2, my2 = Mc.stack ? Mc.y + Mc.h + 8 : Mc.y;
+    const mcx1 = Mc.x1 + Mc.w / 2, mcx2 = mx2 + Mc.w / 2, capX = Mc.stack ? mcx1 : (Mc.x1 + Mc.x2 + Mc.w) / 2;
+    return `<svg id="hsvg" viewBox="0 0 ${P.vb[0]} ${P.vb[1]}" role="img" aria-label="FlexNav handle diagram">
+      <text x="${P.title.x}" y="${P.title.y}" fill="#9fb6d6" font-size="${P.title.fs}">FlexNav handle (teaching diagram, not to scale)</text>
+      <rect x="${P.house.x}" y="${P.house.y}" width="${P.house.w}" height="${P.house.h}" rx="${P.house.rx}" fill="#16233b" stroke="#35507f" stroke-width="2"/>
+      <g id="wheel" transform="translate(${W.cx} ${W.cy})" style="cursor:grab;touch-action:none"><circle r="${W.hit}" fill="#000" fill-opacity="0.001" id="wheelHit"/><circle id="wheelRing" r="${W.R}" fill="#0e1a30" stroke="#5b95ff" stroke-width="${3 * Math.max(1, k * 0.8)}"/><g id="wheelRot"></g><circle r="${20 * k}" fill="#1f3358" stroke="#5b95ff"/><text y="${3.5 * k}" text-anchor="middle" fill="#cfe3ff" font-size="${9.5 * k}">DEPLOY</text></g>
+      <text id="tWheel1" x="${W.cx}" y="${C.y}" text-anchor="middle" fill="#cfe3ff" font-size="${C.fs}">Deployment / resheath wheel</text><text id="tWheel2" x="${W.cx}" y="${C.y2}" text-anchor="middle" fill="#9fb6d6" font-size="${C.fs2}">(clockwise = deploy)</text>
+      <g id="micro" transform="translate(${Mi.cx} ${Mi.cy})" style="cursor:pointer"><circle r="${Mi.r}" fill="#0e1a30" stroke="#ffd24a" stroke-width="2.5"/><g id="microRot"></g><text id="tMicroIn" y="${3 * km}" text-anchor="middle" fill="#ffe9a8" font-size="${(mob ? 10 : 9) * km}">MICRO</text></g>
+      <g id="microBtns"><rect id="muM" x="${mb.x1}" y="${mb.y}" width="${mb.w1}" height="${mb.h}" rx="8" fill="#2a2a14" stroke="#ffd24a"/><text x="${mb.x1 + mb.w1 / 2}" y="${mb.y + mb.h / 2 + 6}" text-anchor="middle" fill="#ffe9a8" font-size="${mob ? 26 : 16}" style="pointer-events:none">-</text>
+      <rect id="muP" x="${mb.x2}" y="${mb.y}" width="${mb.w2}" height="${mb.h}" rx="8" fill="#2a2a14" stroke="#ffd24a"/><text x="${mb.x2 + mb.w2 / 2}" y="${mb.y + mb.h / 2 + 6}" text-anchor="middle" fill="#ffe9a8" font-size="${mob ? 26 : 16}" style="pointer-events:none">+</text></g>
+      <text id="tMicro1" x="${Mi.cx}" y="${C.y}" text-anchor="middle" fill="#ffe9a8" font-size="${C.fs}">MICRO (fine recapture only)</text><text id="tMicro2" x="${Mi.cx}" y="${C.y2}" text-anchor="middle" fill="#c9b36a" font-size="${C.fs2}">- = resheath, + = undo</text>
+      <g id="macro"><rect id="mac1" x="${Mc.x1}" y="${Mc.y}" width="${Mc.w}" height="${Mc.h}" rx="12" fill="#10372f" stroke="#2ee6c4" stroke-width="2"/><rect id="mac2" x="${mx2}" y="${my2}" width="${Mc.w}" height="${Mc.h}" rx="12" fill="#10372f" stroke="#2ee6c4" stroke-width="2"/>
+      <text x="${mcx1}" y="${Mc.y + Mc.h * 0.43}" text-anchor="middle" fill="#bffff2" font-size="${Mc.fs}" style="pointer-events:none">MACRO SLIDE</text><text x="${mcx1}" y="${Mc.y + Mc.h * 0.72}" text-anchor="middle" fill="#bffff2" font-size="${Mc.fs2}" style="pointer-events:none">close nosecone</text>
+      <text x="${mcx2}" y="${my2 + Mc.h * 0.43}" text-anchor="middle" fill="#bffff2" font-size="${Mc.fs}" style="pointer-events:none">MACRO SLIDE</text><text x="${mcx2}" y="${my2 + Mc.h * 0.72}" text-anchor="middle" fill="#bffff2" font-size="${Mc.fs2}" style="pointer-events:none">hold both = close</text></g>
+      <text id="tMacro1" x="${capX}" y="${Mc.capY}" text-anchor="middle" fill="#bffff2" font-size="${C.fs}">Macro-slide buttons</text><text id="tMacro2" x="${capX}" y="${Mc.capY2}" text-anchor="middle" fill="#7fcfbf" font-size="${C.fs2}">nosecone, after release</text>
+      <g id="lockbar" transform="translate(${L.tx} ${L.ty})"><text id="tLockHead" x="0" y="${L.head}" fill="#cfe3ff" font-size="${L.hfs}">Deployment lock - deployed length</text>
+        <rect x="0" y="0" width="${L.white}" height="${L.h}" rx="4" fill="#f4f7ff"/><rect x="${L.white}" y="0" width="${L.gray}" height="${L.h}" rx="4" fill="#6b7280"/>
+        <text id="tWhite" x="${L.white / 2}" y="${L.ty1}" text-anchor="middle" fill="#223" font-size="${L.tfs}">white zone: recapturable</text><text id="tGray" x="${L.white + L.gray / 2}" y="${L.ty1}" text-anchor="middle" fill="#fff" font-size="${L.tfs - 0.5}">gray: no return</text>
+        <rect id="fillBar" x="0" y="${L.h}" width="0" height="${L.fillH}" fill="#4c8dff"/><path id="caret" d="${L.caret}" fill="#ffd24a"/>
+        <g id="lockIcon" transform="${L.icon}" style="cursor:pointer"><rect x="-14" y="-4" width="28" height="30" rx="6" fill="#0e1a30" stroke="#ffd24a" stroke-width="1.5" opacity="0.001"/><rect id="lockBody" x="-8" y="8" width="16" height="12" rx="2" fill="#ffd24a"/><path id="lockShackle" d="M-5 8 v-4 a5 5 0 0 1 10 0 v4" fill="none" stroke="#ffd24a" stroke-width="2.5"/></g>
+        <text id="tLockHint" x="${L.white}" y="${L.hintY}" text-anchor="middle" fill="#ffd24a" font-size="${L.hfs2}">80% lock: tap the lock or press Unlock</text></g>
+    </svg>`;
+  }
   // ---------- handle diagram (SVG) ----------
   buildHandle() {
     const S = this.sim, box = $('#handleBox');
-    box.innerHTML = `<svg id="hsvg" viewBox="0 0 440 328" role="img" aria-label="FlexNav handle diagram">
-      <text x="14" y="16" fill="#9fb6d6" font-size="11">FlexNav handle (teaching diagram, not to scale)</text>
-      <rect x="10" y="26" width="420" height="144" rx="46" fill="#16233b" stroke="#35507f" stroke-width="2"/>
-      <g id="wheel" transform="translate(84 98)" style="cursor:grab;touch-action:none"><circle r="72" fill="#000" fill-opacity="0.001" id="wheelHit"/><circle id="wheelRing" r="56" fill="#0e1a30" stroke="#5b95ff" stroke-width="3"/><g id="wheelRot"></g><circle r="20" fill="#1f3358" stroke="#5b95ff"/><text y="3.5" text-anchor="middle" fill="#cfe3ff" font-size="9.5">DEPLOY</text></g>
-      <text id="tWheel1" x="84" y="190" text-anchor="middle" fill="#cfe3ff" font-size="10.5">Deployment / resheath wheel</text><text id="tWheel2" x="84" y="207" text-anchor="middle" fill="#9fb6d6" font-size="10">(clockwise = deploy)</text>
-      <g id="micro" transform="translate(226 78)" style="cursor:pointer"><circle r="28" fill="#0e1a30" stroke="#ffd24a" stroke-width="2.5"/><g id="microRot"></g><text id="tMicroIn" y="3" text-anchor="middle" fill="#ffe9a8" font-size="9">MICRO</text></g>
-      <g id="microBtns"><rect id="muM" x="184" y="118" width="38" height="30" rx="6" fill="#2a2a14" stroke="#ffd24a"/><text x="203" y="138" text-anchor="middle" fill="#ffe9a8" font-size="16" style="pointer-events:none">-</text>
-      <rect id="muP" x="230" y="118" width="38" height="30" rx="6" fill="#2a2a14" stroke="#ffd24a"/><text x="249" y="138" text-anchor="middle" fill="#ffe9a8" font-size="16" style="pointer-events:none">+</text></g>
-      <text id="tMicro1" x="226" y="190" text-anchor="middle" fill="#ffe9a8" font-size="10.5">MICRO (fine recapture only)</text><text id="tMicro2" x="226" y="207" text-anchor="middle" fill="#c9b36a" font-size="10">- = resheath, + = undo</text>
-      <g id="macro"><rect id="mac1" x="304" y="38" width="118" height="56" rx="12" fill="#10372f" stroke="#2ee6c4" stroke-width="2"/><rect id="mac2" x="304" y="102" width="118" height="56" rx="12" fill="#10372f" stroke="#2ee6c4" stroke-width="2"/>
-      <text x="363" y="62" text-anchor="middle" fill="#bffff2" font-size="10" style="pointer-events:none">MACRO SLIDE</text><text x="363" y="76" text-anchor="middle" fill="#bffff2" font-size="10" style="pointer-events:none">close nosecone</text>
-      <text x="363" y="126" text-anchor="middle" fill="#bffff2" font-size="10" style="pointer-events:none">MACRO SLIDE</text><text x="363" y="140" text-anchor="middle" fill="#bffff2" font-size="10" style="pointer-events:none">hold both = close</text></g>
-      <text id="tMacro1" x="363" y="190" text-anchor="middle" fill="#bffff2" font-size="10.5">Macro-slide buttons</text><text id="tMacro2" x="363" y="207" text-anchor="middle" fill="#7fcfbf" font-size="10">nosecone, after release</text>
-      <g id="lockbar" transform="translate(20 254)"><text id="tLockHead" x="0" y="-12" fill="#cfe3ff" font-size="11">Deployment lock - deployed length</text>
-        <rect x="0" y="0" width="288" height="22" rx="4" fill="#f4f7ff"/><rect x="288" y="0" width="112" height="22" rx="4" fill="#6b7280"/>
-        <text id="tWhite" x="144" y="15" text-anchor="middle" fill="#223" font-size="11">white zone: recapturable</text><text id="tGray" x="344" y="15" text-anchor="middle" fill="#fff" font-size="10.5">gray: no return</text>
-        <rect id="fillBar" x="0" y="22" width="0" height="6" fill="#4c8dff"/><path id="caret" d="M0 30 l-6 9 h12z" fill="#ffd24a"/>
-        <g id="lockIcon" transform="translate(288 -2)" style="cursor:pointer"><rect x="-14" y="-4" width="28" height="30" rx="6" fill="#0e1a30" stroke="#ffd24a" stroke-width="1.5" opacity="0.001"/><rect id="lockBody" x="-8" y="8" width="16" height="12" rx="2" fill="#ffd24a"/><path id="lockShackle" d="M-5 8 v-4 a5 5 0 0 1 10 0 v4" fill="none" stroke="#ffd24a" stroke-width="2.5"/></g>
-        <text id="tLockHint" x="288" y="60" text-anchor="middle" fill="#ffd24a" font-size="10.5">80% lock: tap the lock or press Unlock</text></g>
-    </svg>
+    const mob = window.matchMedia('(max-width:900px)').matches; this.handleMobile = mob; this.fillMax = mob ? 275 : 360;
+    box.innerHTML = this.handleSvg(mob) + `
 <div class="hside">
     <div class="mdep" id="mDep"><div class="mdhead">Deploy by touch: press and hold, or tap for precision</div>
       <div class="mdrow"><button id="mHoldDep" class="mbig hold">Hold to deploy (slow)</button><button id="mHoldRes" class="mbig hold">Hold to resheath</button></div>
@@ -216,10 +236,9 @@ export class UI {
     <div class="hbtns"><button id="hMacro" class="hold" style="grid-column:span 2">Macro slide: close nosecone</button><button id="hUnlock">Unlock (U)</button><button id="hMuM" class="hold" title="MICRO wheel: fine recapture only">Micro &minus; (fine recapture)</button><button id="hMuP" class="hold" title="MICRO wheel: fine recapture only">Micro + (undo)</button></div>
         <div class="speed"><span id="spdTxt" class="ro">wheel speed: -</span></div><div class="gauge"><i id="gSpd"></i></div><div class="speed"><span id="fTxt" class="ro">deployed 0%</span></div><div class="speed"><span id="feelTxt" class="ro">recapture feel: free</span></div><div class="gauge"><i id="gFeel"></i></div>
 <input type="range" id="wheelSlider" min="0" max="100" value="0" aria-label="Deployment fraction (fallback slider)"></div>`;
-    const wr = box.querySelector('#wheelRot');
-    for (let i = 0; i < 12; i++) { const a = i * 30; wr.appendChild(el('rect', { x: -3, y: -56, width: 6, height: 12, fill: '#5b95ff', transform: `rotate(${a})` })); }
-    wr.innerHTML = wr.innerHTML; // reparse svg
-    const mr = box.querySelector('#microRot'); mr.innerHTML = Array.from({ length: 8 }, (_, i) => `<rect x="-2" y="-30" width="4" height="8" fill="#ffd24a" transform="rotate(${i * 45})"/>`).join('');
+    const wr = box.querySelector('#wheelRot'); const Rw = this.hP.wheel.R, kw = Rw / 56;
+    wr.innerHTML = Array.from({ length: 12 }, (_, i) => `<rect x="${-3 * kw}" y="${-Rw}" width="${6 * kw}" height="${12 * kw}" fill="#5b95ff" transform="rotate(${i * 30})"/>`).join('');
+    const mr = box.querySelector('#microRot'), rm = this.hP.micro.r, km = rm / 28; mr.innerHTML = Array.from({ length: 8 }, (_, i) => `<rect x="${-2 * km}" y="${-rm - 2 * km}" width="${4 * km}" height="${8 * km}" fill="#ffd24a" transform="rotate(${i * 45})"/>`).join('');
     this.svg = box.querySelector('svg');
     // wheel drag: angle about the wheel centre. Works for mouse and real touch (pointer capture, touch-action none, touchstart default prevented so the page never scrolls or fires a ghost click).
     // Passing through the centre (dead zone) pauses the turn and re-syncs on exit, so there is no 180-degree flip. Coalesced touch samples are all applied.
@@ -330,7 +349,7 @@ export class UI {
     const rot = document.getElementById('wheelRot'); const a = d.f * 1800; rot.setAttribute('transform', `rotate(${a})`);
     document.getElementById('microRot').setAttribute('transform', `rotate(${(d.retractMm || 0) * 40})`);
     { const rc = (S.phase === 5 || S.phase === 6) && d.f > 0.02; for (const id of ['#hMuM', '#hMuP', '#muM', '#muP', '#micro']) { const e = $(id); e.classList.toggle('dim', !rc); } }
-    const bx = d.f * 360; $('#fillBar').setAttribute('width', bx); $('#caret').setAttribute('transform', `translate(${bx} 0)`);
+    const bx = d.f * (this.fillMax || 360); $('#fillBar').setAttribute('width', bx); $('#caret').setAttribute('transform', `translate(${bx} 0)`);
     $('#lockBody').setAttribute('fill', d.locked ? '#ff6b57' : '#7dff9a'); $('#lockShackle').setAttribute('stroke', d.locked ? '#ff6b57' : '#7dff9a'); $('#lockShackle').setAttribute('d', d.locked ? 'M-5 8 v-4 a5 5 0 0 1 10 0 v4' : 'M-5 8 v-4 a5 5 0 0 1 10 0 v-1');
     const mc = d.released && d.macro < 1 && S.phase === 8; for (const id of ['#mac1', '#mac2']) { $(id).setAttribute('fill', mc ? '#146c58' : '#10372f'); $(id).setAttribute('opacity', (d.released && S.phase === 8) ? 1 : 0.35); }
     this.setText('#fTxt', `deployed ${Math.round(d.f * 100)}% - ${(d.retractMm || 0).toFixed(1)} mm - ${(d.turns || 0).toFixed(1)} turns${d.f > 0.8 ? ' (gray zone)' : ''}`);

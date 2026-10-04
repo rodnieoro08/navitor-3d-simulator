@@ -28,7 +28,7 @@ const up = async () => mobile ? touch('touchEnd') : page.mouse.up();
 const path = async (pts, ms, sampleAt = 0.6) => { let mid = null; await down(...pts[0]); for (let i = 1; i < pts.length; i++) { await move(...pts[i]); await page.waitForTimeout(ms / pts.length); if (!mid && i / pts.length >= sampleAt) mid = await st(); } await up(); await page.waitForTimeout(350); return mid; };
 const arcPts = (g, a0, a1, rad, n = 48) => Array.from({ length: n + 1 }, (_, i) => { const a = (a0 + (a1 - a0) * i / n) * Math.PI / 180; return [g.cx + rad * Math.cos(a), g.cy + rad * Math.sin(a)]; });
 const sync = (s, tag) => { const pctTxt = /deployed (\d+)%/.exec(s.txt); ok(pctTxt && Math.abs(+pctTxt[1] - s.f * 100) <= 0.6, `${tag}: "deployed %" readout ${pctTxt && pctTxt[1]}% matches f ${(s.f * 100).toFixed(1)}%`); ok(Math.abs(((s.rot - s.f * 1800) % 360 + 360) % 360) < 1.5 || Math.abs(((s.rot - s.f * 1800) % 360 + 360) % 360 - 360) < 1.5, `${tag}: wheel angle ${s.rot.toFixed(0)} deg = ${(s.f * 1800).toFixed(0)} deg (f x 1800)`); ok(Math.abs(s.mm - s.f * 52) < 0.2, `${tag}: ${s.mm.toFixed(1)} mm retraction matches f`); };
-const g = await geom(); ok(g.r >= (mobile ? 30 : 40) * (mobile ? 1 : 0.7), `wheel is ${(g.r * 2).toFixed(0)} px wide on screen`);
+const g = await geom(); ok(g.r >= (mobile ? 75 : 40) * (mobile ? 1 : 0.7), `wheel is ${(g.r * 2).toFixed(0)} px wide on screen (phone needs >= 150)`);
 let s0 = await st(); ok(s0.f === 0, 'start: 0% deployed');
 // 1) clockwise, slow: one full turn in 4 s -> 20 %, "slow - good"
 await spdReset(); let mid = await path(arcPts(g, -90, 270, g.r * 0.8), 4000); let s = await st(); const slowSeen = await spdSeen();

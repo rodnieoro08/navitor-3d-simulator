@@ -1,5 +1,6 @@
 // Handle diagram + fluoro label layout: programmatic overlap checks (bounding boxes) + screenshots, desktop 1280x800 and phone 390 wide.
 import { launch } from './pw.mjs';
+import fs from 'fs'; fs.mkdirSync('shots/v10', { recursive: true });
 const prof = process.argv[2] || 'desktop'; const mobile = prof === 'phone';
 let pass = 0, bad = 0; const fails = [];
 const ok = (c, m) => { if (c) pass++; else { bad++; fails.push(m); } console.log((c ? '  ok   ' : '  FAIL ') + m); };
@@ -53,6 +54,32 @@ const shotHandle = async (n) => { await tab('handle'); await page.waitForTimeout
 await tab('handle'); let o = await check(); report('phase 1', o);
 ok(o.labels.some(s => s === 'MICRO (fine recapture only)'), 'label reads "MICRO (fine recapture only)"'); ok(o.labels.includes('Deployment / resheath wheel') && o.labels.includes('white zone: recapturable') && o.labels.includes('gray: no return'), 'wheel, white-zone and gray labels present');
 await shotHandle('phase1');
+
+// ---- size checks (the controller must be big): wheel, micro, macro, lock bar, caption fonts, edge-to-edge width
+const sizes = () => page.evaluate(() => {
+  const svg = document.getElementById('hsvg'), sr = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal, sc = sr.width / vb.width; const R = (q) => document.querySelector(q).getBoundingClientRect();
+  const fonts = [...svg.querySelectorAll('text')].filter(t => t.textContent.trim()).map(t => ({ s: t.textContent.trim(), px: parseFloat(t.getAttribute('font-size')) * sc }));
+  const hs = document.querySelector('#mDep'); const hb = hs ? hs.getBoundingClientRect() : null;
+  return { vw: innerWidth, svgX: sr.left, svgR: sr.right, svgW: sr.width, ring: R('#wheelRing').width, hit: R('#wheelHit').width, mu: [R('#muM'), R('#muP')].map(r => [r.width, r.height]), mac: [R('#mac1'), R('#mac2')].map(r => [r.width, r.height]), lock: R('#lockbar rect').height, lockIcon: R('#lockIcon').height, micro: R('#micro circle').width,
+    minFont: Math.min(...fonts.map(f => f.px)), minFontName: fonts.sort((a, b) => a.px - b.px)[0].s, sx: document.documentElement.scrollWidth, cx: document.documentElement.clientWidth, mdepBottom: hb && hb.bottom, mdepVisible: hb && hb.height > 0, svgTop: sr.top, hasSideBtns: !!document.querySelector('#hDep') };
+});
+{ await tab('handle'); const z = await sizes(); const tag = prof + ' ' + z.vw + 'px';
+  if (mobile) {
+    ok(z.svgX <= 6 && z.vw - z.svgR <= 6, `${tag}: diagram is edge to edge (left ${z.svgX.toFixed(0)} px, right ${(z.vw - z.svgR).toFixed(0)} px margin)`);
+    ok(z.ring >= 150 && z.ring / z.vw >= 0.38 && z.ring / z.vw <= 0.5, `${tag}: deployment wheel ${z.ring.toFixed(0)} px across = ${(100 * z.ring / z.vw).toFixed(0)}% of the width (>= 150 px)`);
+    ok(z.mu.every(m => m[0] >= 44 && m[1] >= 44), `${tag}: MICRO - / + buttons ${z.mu.map(m => m.map(Math.round).join('x')).join(', ')} (>= 44)`); ok(z.micro >= 70, `${tag}: MICRO wheel ${z.micro.toFixed(0)} px`);
+    ok(z.mac.every(m => m[0] >= 100 && m[1] >= 56), `${tag}: MACRO SLIDE buttons ${z.mac.map(m => m.map(Math.round).join('x')).join(', ')}`);
+    ok(z.lock >= 28 && z.lockIcon >= 40, `${tag}: lock bar ${z.lock.toFixed(0)} px high (>= 28), lock icon ${z.lockIcon.toFixed(0)} px`);
+    ok(z.minFont >= 12, `${tag}: smallest caption ${z.minFont.toFixed(1)} px ("${z.minFontName}")`);
+    ok(z.sx <= z.cx, `${tag}: no horizontal scroll`);
+    ok(z.mdepVisible && z.svgTop >= z.mdepBottom - 1 && z.svgTop - z.mdepBottom < 24, `${tag}: the larger diagram sits directly beneath the touch deploy block (gap ${(z.svgTop - z.mdepBottom).toFixed(0)} px)`);
+    for (const w of [360, 430]) { await page.setViewportSize({ width: w, height: 844 }); await page.waitForTimeout(500); await tab('handle'); const y = await sizes(); const t2 = prof + ' ' + w + 'px';
+      ok(y.sx <= y.cx, `${t2}: no horizontal scroll (scrollWidth ${y.sx} / ${y.cx})`); ok(y.ring >= (w === 360 ? 150 : 165), `${t2}: deployment wheel ${y.ring.toFixed(0)} px across`); ok(y.minFont >= (w === 360 ? 12 : 12), `${t2}: smallest caption ${y.minFont.toFixed(1)} px ("${y.minFontName}")`);
+      const o2 = await check(); report(t2, o2); await page.locator('#handleBox').screenshot({ path: `shots/v10/phone${w}-handle.png` }); }
+    await page.setViewportSize({ width: 390, height: 844 }); await page.waitForTimeout(400);
+  } else {
+    ok(z.ring >= 85, `${tag}: deployment wheel ${z.ring.toFixed(0)} px across (was ~68 px)`); ok(z.mu.every(m => m[1] >= 24), `${tag}: MICRO buttons ${z.mu.map(m => m.map(Math.round).join('x')).join(', ')}`); ok(z.sx <= z.cx, `${tag}: no horizontal scroll`);
+  } }
 // ---- state 2: locked at 80% with the Unlock hint
 await page.evaluate(() => { __drv.goPhase1(); __drv.goDesc(); __drv.setRotation(); __drv.goArch(); __drv.goCross(); __drv.alignAt(); __sim.setAngles(-30, -30); __drv.press(); __drv.toLock(); }); await page.waitForTimeout(900);
 await tab('handle'); o = await check(); report('locked 80%', o); ok(o.labels.some(s => /80% lock/.test(s)), 'lock hint present: ' + o.labels.find(s => /80% lock/.test(s))); await shotHandle('locked80');

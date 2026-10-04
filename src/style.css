@@ -35,7 +35,7 @@ h1{margin:10px 0 4px;font-size:26px}.sub{color:#9fb6d6;margin:0 0 10px}.legal{pa
 #note{flex:1 1 240px;color:#ffd27a;font-size:12.5px;min-height:16px;line-height:1.25}
 #actions{display:flex;gap:8px;flex-wrap:wrap}
 #viewtabs{display:none}
-#grid{flex:1;min-height:0;display:grid;gap:8px;padding:8px;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"mon td" "ctrl handle"}
+#grid{flex:1;min-height:0;display:grid;gap:8px;padding:8px;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"mon td" "ctrl handle"}
 .panel{position:relative;background:#05080e;border:1px solid #1f2d4a;border-radius:10px;overflow:hidden;min-height:0}
 #monPanel{grid-area:mon}#tdPanel{grid-area:td}#handlePanel{grid-area:handle;overflow:auto}#ctrl{grid-area:ctrl;min-height:0;display:flex;flex-direction:column;background:#0b1322;border:1px solid #1f2d4a;border-radius:10px}
 .panel canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
@@ -60,7 +60,7 @@ h1{margin:10px 0 4px;font-size:26px}.sub{color:#9fb6d6;margin:0 0 10px}.legal{pa
 .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 input[type=range]{width:100%;height:24px;accent-color:#4c8dff;margin:0}
 .sl{position:relative}.sl .band{position:absolute;top:8px;height:8px;background:#2fa36a66;border-radius:4px;pointer-events:none}
-#handleBox{padding:6px;display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:8px;align-items:start}
+#handleBox{padding:6px;display:grid;grid-template-columns:minmax(0,1.9fr) minmax(0,1fr);gap:8px;align-items:start}
 #handleBox svg{width:100%;height:auto;display:block;touch-action:none}
 .hside{display:flex;flex-direction:column;gap:5px}
 .hbtns{display:grid;grid-template-columns:1fr 1fr;gap:5px}.hbtns.three #hDepF{grid-column:span 2}.hbtns button{min-height:36px;padding:2px 4px;font-size:12.5px}
@@ -93,7 +93,7 @@ input[type=range]{width:100%;height:24px;accent-color:#4c8dff;margin:0}
  .pad{grid-template-columns:repeat(3,70px);grid-template-rows:repeat(3,52px)}
  #handlePanel{margin-bottom:8px;position:relative;z-index:1}#handleBox{grid-template-columns:1fr}
  .hbtns button{min-height:46px}.hbtns.three{grid-template-columns:repeat(3,1fr)}.hbtns.three button{grid-column:auto !important}
- #handleBox svg{max-height:200px;margin:0 auto}#handleBox .hside{order:-1}
+ #handleBox svg{margin:0 auto;order:-2}#handleBox .hside{display:contents}#handleBox .hside>.mdep{order:-3}#handleBox{gap:8px}
  #foot{font-size:10.5px}
 }
 
@@ -145,3 +145,11 @@ button.attn{animation:pulse 1.1s ease-in-out infinite;background:#c9792b;border-
 .chip.next{cursor:pointer;border-color:#d9a43a}
 .sheet td.skip,.sheet .skipbox b{color:#ffd27a}.skipbox{border:1px dashed #d9a43a;border-radius:8px;padding:6px 10px;margin:8px 0;font-size:13px}.skipbox ul{margin:4px 0 0;padding-left:18px}
 @media (max-width:900px){#hdr .hdrctl #btnSkip{min-height:44px}.chip.next i{box-shadow:0 0 0 1px #d9a43a}}
+
+/* --- v10: bigger handle diagram --- */
+@media (max-width:900px){
+ #handlePanel{margin-left:-6px;margin-right:-6px;border-left:0;border-right:0;border-radius:0}
+ #handleBox{padding:6px 4px}
+ #handleBox svg{width:100%;height:auto}
+ .hbtns button{min-height:48px}
+}
