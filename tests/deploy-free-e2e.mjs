@@ -29,6 +29,7 @@ const spinTo80 = async () => { const g = await geom(); const pts = arcPts(g, -90
 const ff = (maxSteps = 4000) => page.evaluate((n) => { const S = __sim.sim; let g = 0; while (S.phase === 5 && g++ < n) S.update(1 / 30); return g / 30; }, maxSteps);
 const holdUntil = async (sel) => { const b = await page.locator(sel).boundingBox(); const x = b.x + b.width / 2, y = b.y + b.height / 2; await down(x, y); await page.waitForTimeout(400); const held = await page.evaluate(() => __sim.sim.input.deploy); await ff(); await up(); await page.waitForTimeout(400); return held; };
 const checkAdvance = async (tag) => {
+  await page.waitForTimeout(700);
   const s = await st();
   ok(s.phase === 6 && s.locked && Math.abs(s.f - 0.8) < 1e-6, `${tag}: reached 80% -> phase ${s.phase} automatically, locked, f=${s.f.toFixed(3)}`);
   ok(s.fl.autoAdvance56 >= 1, `${tag}: auto-advance recorded; coach line: "${(s.note || s.coach).slice(0, 100)}"`);
