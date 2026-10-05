@@ -38,14 +38,14 @@ console.log('== gating ==');
   s.act.setCarm(-30, -30); s.act.confirmAlign(); ok(!s.chk.alignConfirmed && s.phase === 4, 'align confirm refused while posts are off-commissure');
   s.act.rotateStep(-s.alignErr()); s.act.confirmAlign(); up(s, 0.2); ok(s.phase === 5, 'align at annulus + centred + marker -> phase 5');
 }
-{ const s = fresh(); to(s, 5); s.act.setCarm(0, 0); s.act.wheel(0.05); ok(s.dev.f === 0, 'deployment refused at AP (not cusp-overlap edge-on)');
+{ const s = fresh(); to(s, 5); s.act.setCarm(0, 0); s.act.wheel(0.05); ok(s.dev.f > 0 && s.flags.deployNoView, 'v15: deployment is allowed at AP (not cusp-overlap): recorded as a miss, not blocked');
   s.act.setCarm(-36, -24); const vi = s.viewInfo(); ok(!vi.cuspOverlap, 'CT plan RAO36/CAU24 is visibly NOT edge-on (err ' + vi.err.toFixed(1) + ' deg)');
   s.act.setCarm(30 * -1, -30); ok(s.viewInfo().cuspOverlap, 'true view RAO30/CAU30 accepted (err ' + s.viewInfo().err.toFixed(2) + ')');
   s.act.setCarm(26, 24); ok(!s.viewInfo().threeCusp, 'CT plan LAO26/CRA24 is not accepted as 3-cusp view (az off)');
   s.act.setCarm(32, 30); ok(s.viewInfo().threeCusp, 'true view LAO32/CRA30 accepted as 3-cusp');
   s.act.setCarm(-34, -28); ok(!s.viewInfo().cuspOverlap, '3.75 deg off is outside tolerance (2.5): ' + s.viewInfo().err.toFixed(2)); s.act.setCarm(-31, -29); ok(s.viewInfo().cuspOverlap, '~1.4 deg off accepted: ' + s.viewInfo().err.toFixed(2));
   s.act.setCarm(-30, -30); s.act.setPacing('fast'); ok(s.flags.pacingWrong, 'rapid pacing before final release flagged');
-  const s2 = fresh(); to(s2, 5); s2.act.setCarm(-30, -30); s2.dev.s += 4; s2.act.wheel(0.05); ok(s2.dev.f === 0, 'deployment refused when shaft marker is off the annular plane');
+  const s2 = fresh(); to(s2, 5); s2.act.setCarm(-30, -30); s2.dev.s += 4; s2.act.wheel(0.05); ok(s2.dev.f > 0 && s2.flags.deployNoMarker, 'v15: deployment is allowed with the marker off the annular plane: recorded as a miss, not blocked');
 }
 console.log('== phase 1 failures ==');
 { const s = fresh(); run(s, { adv: 1, fast: 1 }, 60, () => { }); ok(s.fx && ['force', 'scrapePlaque', 'kink'].includes(s.fx.type), 'fast advance with no flex/rotation fails in calcium: ' + (s.fx && s.fx.type)); const at = s.dev.s; ok(s.fx.fluoro && s.fx.coach, 'has fluoro problem + coaching line'); waitRetry(s); ok(!s.fx && s.dev.s < at, 'retry backs off'); D.goPhase1(); ok(s.phase === 2, 'then completes phase 1'); }
@@ -80,8 +80,7 @@ console.log('== phase 4: Skip always proceeds immediately ==');
   ok(s.act.skipAlign() === true && s.phase === 5, 'one click on Skip -> phase 5 immediately');
   ok(s.flags.alignSkipped && s.flags.skipNoCross && !s.flags.skipNoCentre && !s.flags.skipNoMarker, 'flags: alignment + crossing recorded (centring/marker not judged before the crossing)');
   ok(/not crossed/i.test(s.note) && /alignment/i.test(s.note) && /scored as a miss/i.test(s.note), 'coach line names what was skipped: "' + s.note + '"');
-  ok(/skipped .*crossing the valve/i.test(s.coach) && /locked out/i.test(s.coach), 'phase 5 coach explains what to fix');
-  s.act.setCarm(-30, -30); s.act.wheel(0.05); ok(s.dev.f === 0 && /not across the annulus/i.test(s.note), 'phase 5 gates stay: wheel refuses, coach explains: "' + s.note + '"');
+  ok(/skipped .*crossing the valve/i.test(s.coach) && /not blocked/i.test(s.coach), 'phase 5 coach explains what to fix (unsheathing not blocked, scored)');
   s.act.setCarm(-30, -30); D.goCross(); up(s, 0.3); D.press(); D.toLock(); D.secondView(); D.release('fast'); D.phase8(); D.phase9(); ok(s.finished, 'the case can still be finished after fixing the position in phase 5');
   const nose = s.score.rows.find(x => x.id === 'nose'), al = s.score.rows.find(x => x.id === 'align');
   ok(nose && !nose.pass && /pressed Skip before the valve had crossed/i.test(nose.feedback), 'nosecone/path row is a scored miss with a proctor sentence: "' + (nose && nose.feedback.slice(0, 100)) + '"');

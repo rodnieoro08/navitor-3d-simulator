@@ -22,7 +22,7 @@ export const COACH = {
   2: 'Descending aorta: rotate (< 60 deg, never against resistance) until 2 Vision markers sit on the OUTER curve and 1 on the INNER curve, then confirm. Rotation can be lost in the arch - you will re-check it at the annulus.',
   3: 'Arch: flex the capsule to follow the horizontal aorta and stay central on the wire. Do not ride the greater curve. Unflex once you are in the ascending aorta.',
   4: 'Cross the valve holding the wire, centre the shaft in the ascending aorta, put the inner-shaft marker on the annular plane, and re-check commissure alignment in the cusp-overlap view.',
-  5: 'Cusp overlap, parallax gone: NCC alone on the left, pigtail at the NCC nadir. Watch only the NCC. Slow wheel, inflow first. Forward pressure on the system, a little pull on the wire. (Resheathing? The MICRO wheel is for fine recapture only.)',
+  5: 'Cusp overlap, parallax gone: NCC alone on the left, pigtail at the NCC nadir. Watch only the NCC. Slow wheel, inflow first. Forward pressure on the system, a little pull on the wire. The wheel is never blocked here: skipped set-up (view, marker on the plane, centring, wire fixed) is scored and the valve lands where you leave it. At 80% the lock engages and you move on to phase 6 by yourself. (Resheathing? The MICRO wheel is for fine recapture only.)',
   6: 'Lock engaged at 80%. Recapture still works (MICRO wheel = fine recapture only). Leave cusp overlap, apply the 3-cusp plan, kill parallax, read the LEFT cusp side (ignore the NCC), confirm both depths and the posts.',
   7: 'Unlock and finish the wheel slowly - speed after 80% still matters. Use the pacing the case card asks for. Leaflets open, cuff seals.',
   8: 'Keep the wire FIXED across the valve (it is the rail). Centre the OPEN nosecone and withdraw the whole system, nosecone still open, back through the valve and the arch into the descending aorta. Only there close the tip with the MACRO slide (not the deployment or MICRO wheel), then keep withdrawing out the iliac holding the wire.',
@@ -95,7 +95,7 @@ export class Sim {
     let c = COACH[this.phase];
     if (this.phase === 6) c = this.chk.secondView ? 'Both sides and the posts are confirmed in the 3-cusp view. Now press UNLOCK (the orange button, the lock on the handle, or the U key), then turn the deployment wheel CLOCKWISE slowly to 100%.' : COACH[6] + ' When it is confirmed, press UNLOCK (U) to carry on. Passing 80% without this check is a MAJOR miss.';
     if (this.phase === 4 && this.p4Ready()) c = COACH[4] + ' Crossed, centred and on the plane: confirm the commissure alignment (recommended). You may also continue without it (press Skip alignment check, or just start the wheel): that is a scored miss on the alignment row.';
-    if (this.phase === 5 && (this.flags.alignSkipped || this.flags.skipNoCross || this.flags.skipNoCentre || this.flags.skipNoMarker)) { const m = []; if (this.flags.alignSkipped) m.push('the alignment re-check at the annulus'); if (this.flags.skipNoCross) m.push('crossing the valve'); if (this.flags.skipNoCentre) m.push('centring the shaft'); if (this.flags.skipNoMarker) m.push('putting the marker on the annular plane'); c = COACH[5] + ' NOTE: you skipped ' + m.join(', ') + ' - scored as a miss.' + ((this.flags.skipNoCross || this.flags.skipNoCentre || this.flags.skipNoMarker) ? ' Unsheathing stays locked out until the valve is crossed, centred and the inner-shaft marker is on the annular plane (and the view is cusp overlap).' : ''); }
+    if (this.phase === 5 && (this.flags.alignSkipped || this.flags.skipNoCross || this.flags.skipNoCentre || this.flags.skipNoMarker)) { const m = []; if (this.flags.alignSkipped) m.push('the alignment re-check at the annulus'); if (this.flags.skipNoCross) m.push('crossing the valve'); if (this.flags.skipNoCentre) m.push('centring the shaft'); if (this.flags.skipNoMarker) m.push('putting the marker on the annular plane'); c = COACH[5] + ' NOTE: you skipped ' + m.join(', ') + ' - scored as a miss.' + ((this.flags.skipNoCross || this.flags.skipNoCentre || this.flags.skipNoMarker) ? ' Unsheathing is not blocked, but starting it before the valve is crossed, centred and the inner-shaft marker is on the annular plane (in the cusp-overlap view) lands the valve badly and is scored.' : ''); }
     if (this.phase === 7) c = 'Unlocked - past the point of no return. Finish slowly: turn the deployment wheel clockwise (or hold Deploy slow, or drag the slider) up to 100%. Rapid pacing for the final release only if the case card says so. Speed after 80% still matters.';
     if (this.phase === 8) { const st = this.macroState();
       if (st === 'locked') c = 'Release done. Keep the wire FIXED across the valve and centre the OPEN nosecone on it, then withdraw the whole system (nosecone still open) back through the valve and the arch into the descending aorta. The MACRO slide is locked until you are there.';
@@ -212,15 +212,12 @@ export class Sim {
       }
       if (d.locked) { this.say(this.chk.secondView ? 'The 80% lock is still engaged. Press UNLOCK (button or U key), then continue the wheel.' : 'The 80% lock is engaged. Do the 3-cusp second-view check (Confirm button), then press UNLOCK (U). Unlocking without the check is a MAJOR miss.', 6); return false; }
       if (d.f <= 0.02) { // starting
-        const vi = this.viewInfo();
-        if (!vi.cuspOverlap) { this.say('Kill parallax first, in the cusp-overlap view (NCC alone on the left).', 4); return false; }
-        if (this.sysZ() < -2.6) { this.say('The valve is not across the annulus yet: advance over the wire until the inner-shaft marker is on the annular plane, then unsheathe.', 5); return false; }
-        if (Math.abs(this.sysZ()) > 2.6 || Math.abs(d.lat) > 2.6) { this.say('Re-centre the shaft and put the inner-shaft marker back on the annular plane before unsheathing.', 4); return false; }
-        if (!this.wire.hold) { this.say('Fix the wire first.', 3); return false; }
+        // v15: unsheathing is ALWAYS allowed in phase 5. Prerequisites that are not met are recorded as scored misses (not blocked); the valve then lands where the system really is.
+        this.startDeploy();
         if (!v.alignFrozen) v.alignFrozen = null;
       }
       const nf = d.f + df;
-      if (nf >= 0.8 && d.lockArmed && !d.released) { d.f = 0.8; d.locked = true; d.lockArmed = false; this.flags.stabAt80 = this.v.stab; this.say('Deployment lock engaged at 80%. Recapture still works.', 4); this.log('lockEngaged'); if (this.phase === 5) { this.chk.secondView = false; this.setPhase(6); } }
+      if (nf >= 0.8 && d.lockArmed && !d.released) { d.f = 0.8; d.locked = true; d.lockArmed = false; this.flags.stabAt80 = this.v.stab; this.log('lockEngaged'); if (this.phase === 5) { this.chk.secondView = false; this.flags.autoAdvance56 = (this.flags.autoAdvance56 || 0) + 1; this.setPhase(6); this.say('80% lock engaged - moved on to phase 6 automatically. Now the 3-cusp second view: confirm both sides and the posts, then Unlock. Recapture below 80% still works.', 7); } else this.say('Deployment lock engaged at 80%. Recapture still works.', 4); }
       else d.f = Math.min(1, nf);
     } else {
       if (d.f > 0.8 + 1e-6) { this.say('Past the point of no return (gray zone) - the valve cannot be recaptured.', 4); return false; }
@@ -232,6 +229,18 @@ export class Sim {
       if (d.f < 0.74) d.lockArmed = true; // hysteresis: a small backwards wobble after Unlock must not re-engage the lock
     }
     return true;
+  }
+  // v15: first movement of the wheel in phase 5 (valve still fully sheathed). Never refuses; records every skipped prerequisite for the score sheet.
+  startDeploy() {
+    const d = this.dev, F = this.flags, vi = this.viewInfo(), z = this.sysZ(), miss = [];
+    if (this.phase !== 5) return;
+    if (!vi.cuspOverlap) { F.deployNoView = true; miss.push('the cusp-overlap view (parallax not killed)'); }
+    if (z < -2.6) { F.deployNoMarker = true; F.deployNoCross = true; miss.push('the valve across the annulus (the capsule is still above the annular plane)'); }
+    else if (Math.abs(z) > 2.6) { F.deployNoMarker = true; miss.push('the inner-shaft marker on the annular plane (' + Math.abs(z).toFixed(1) + ' mm ' + (z > 0 ? 'too deep' : 'too high') + ')'); }
+    if (Math.abs(d.lat) > 2.6) { F.deployOffCentre = true; miss.push('a centred shaft (' + Math.abs(d.lat).toFixed(1) + ' mm off)'); }
+    if (!this.wire.hold) { F.deployNoHold = true; miss.push('the wire fixed'); }
+    F.deployStarts = (F.deployStarts || 0) + 1;
+    if (miss.length) { F.deployUnready = (F.deployUnready || 0) + 1; this.log('deployUnready', { z: +z.toFixed(1), lat: +d.lat.toFixed(1), view: vi.cuspOverlap, hold: this.wire.hold }); this.say('Unsheathing without ' + miss.join(', ') + ' - allowed, but scored as a miss, and the valve will land where the system really is. Recapture (below 80%) if you want to fix it.', 9); }
   }
   unlock() {
     const d = this.dev;
@@ -274,7 +283,7 @@ export class Sim {
     this.log('phase4Skipped', { align: !c.alignConfirmed, crossed: !!c.crossed, centred: !!c.centered, marker: !!c.marker });
     this.setPhase(5);
     const list = miss.length ? miss.join('; ') : 'nothing was missed';
-    this.say(`Skipped to the landing: ${list} - scored as a miss.` + (fix.length ? ` Before you unsheathe, ${fix.join(', and ')}; the wheel stays locked out until then.` : ' Continuing to the landing.'), 10);
+    this.say(`Skipped to the landing: ${list} - scored as a miss.` + (fix.length ? ` Before you unsheathe, ${fix.join(', and ')}; unsheathing is not blocked, but if you start now the valve lands where the system is and every skipped step is scored.` : ' Continuing to the landing.'), 10);
     return true;
   }
   // ---------- Skip phase (learner button) ----------

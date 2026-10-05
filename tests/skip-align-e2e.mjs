@@ -18,12 +18,13 @@ await skip.click(); await page.waitForTimeout(400);
 let s = await st(); ok(s.phase === 5, 'Skip with nothing satisfied: ONE click -> phase 5 immediately');
 ok(s.flags.alignSkipped && s.flags.skipNoCross, 'misses recorded: alignment not re-checked + valve not crossed');
 let cb = (await page.innerText('#coachbar')).replace(/\s+/g, ' '); ok(/not crossed/i.test(cb) && /scored as a miss/i.test(cb), 'coach line names what was skipped: "' + cb.slice(0, 200) + '"');
-ok(/skipped .*crossing the valve/i.test(cb) && /locked out/i.test(cb), 'phase 5 coach explains what to fix');
+ok(/skipped .*crossing the valve/i.test(cb) && /not blocked/i.test(cb), 'phase 5 coach explains what to fix (not blocked, scored)');
 await page.screenshot({ path: `shots/v4/${prof}-phase5-after-skip-nothing.png` });
-// phase 5 gates stay: the wheel refuses and says why
-await page.evaluate(() => { __sim.setAngles(-30, -30); __sim.sim.act.wheel(0.05); });
-s = await st(); ok(s.dev.f === 0 && /not across the annulus/i.test(s.note), 'unsheathing refused in phase 5: "' + s.note + '"');
-await page.evaluate(() => { __sim.setAngles(32, 30); __sim.sim.act.wheel(0.05); }); s = await st(); ok(s.dev.f === 0 && /cusp-overlap/i.test(s.note), 'edge-on / cusp-overlap gate still applies: "' + s.note + '"');
+// v15: phase 5 never blocks unsheathing: the first turn is allowed, the skipped set-up is recorded and explained
+await page.evaluate(() => { __sim.setAngles(32, 30); __sim.sim.act.wheel(0.05); });
+s = await st(); ok(s.dev.f > 0 && s.flags.deployNoView && s.flags.deployNoCross, 'unsheathing in phase 5 is allowed even edge-on / not across the annulus; recorded as misses: "' + s.note.slice(0, 140) + '"');
+ok(/Unsheathing without/i.test(s.note) && /scored as a miss/i.test(s.note), 'coach line explains what was skipped');
+await page.evaluate(() => { __drv.resheathTo(0); __sim.setAngles(-30, -30); }); s = await st(); ok(s.dev.f < 0.01 && s.phase === 5, 'recaptured back to fully sheathed to carry on');
 // the proctor rows carry the misses at the end
 await page.evaluate(() => { __sim.setAngles(-30, -30); __drv.goCross(); __drv.press(); __drv.toLock(); __drv.secondView(); __drv.release('fast'); __drv.phase8(); __drv.phase9(); }); await page.waitForTimeout(500);
 const rows = await page.evaluate(() => Object.fromEntries(__sim.sim.score.rows.filter(r => ['nose', 'align'].includes(r.id)).map(r => [r.id, [r.pass, r.feedback]])));
