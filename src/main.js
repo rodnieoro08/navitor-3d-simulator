@@ -18,7 +18,7 @@ const errors = [];
 addEventListener('error', e => errors.push(String(e.message)));
 let topH = 0, paused = false, last = performance.now(), acc = 0, tClock = 0;
 function frame(now) {
-  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  const dt = Math.min(0.25, (now - last) / 1000); last = now;   // up to 7 fixed sim steps per frame: the case keeps real time on slow GPUs
   if (!paused) { acc += dt; while (acc >= 1 / 30) { sim.update(1 / 30); acc -= 1 / 30; } }
   tClock += dt;
   device.update(sim, dt);

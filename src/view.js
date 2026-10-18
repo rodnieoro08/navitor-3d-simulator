@@ -2,10 +2,12 @@
 import { loadOverlays } from './overlays.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { D2R, R2D, clamp, lerp, smooth, beamDir, fmtLao, fmtCra, wrap180 } from './util.js';
 import { lumenUniforms, wallClip } from './scene.js';
 import { R_ANN } from './anatomy.js';
 import { DEV } from './device.js';
+import * as PHd from './physics.js';
 
 const POST_FRAG = `
 precision highp float; varying vec2 vUv; uniform sampler2D tAcc; uniform float uTime; uniform vec2 uRes; uniform float uAspect; uniform float uNoise; uniform float uFail;
@@ -34,7 +36,7 @@ export class Views {
     this.zoom = 1;
     // monitor
     this.rMon = new THREE.WebGLRenderer({ canvas: dom.mon, antialias: true, preserveDrawingBuffer: true });
-    this.rMon.setClearColor(0x0a0f18, 1);
+    this.rMon.setClearColor(0x0a0f18, 1); this.rMon.toneMapping = THREE.ACESFilmicToneMapping; this.rMon.toneMappingExposure = 1.0;
     this.rMon.localClippingEnabled = true;
     this.camMon = new THREE.OrthographicCamera(-100, 100, 100, -100, 1, 1600);
     this.rt = new THREE.WebGLRenderTarget(512, 512, { type: THREE.HalfFloatType, format: THREE.RGBAFormat, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false });
@@ -43,8 +45,11 @@ export class Views {
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy,0.,1.); }', fragmentShader: POST_FRAG, depthTest: false, depthWrite: false });
     this.postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.postMat));
     // 3D panel
-    this.r3 = new THREE.WebGLRenderer({ canvas: dom.td, antialias: true, preserveDrawingBuffer: true });
-    this.r3.setClearColor(0x0d1420, 1); this.r3.localClippingEnabled = true;
+    this.r3 = new THREE.WebGLRenderer({ canvas: dom.td, antialias: true, preserveDrawingBuffer: true, alpha: true });
+    this.r3.setClearColor(0x0d1420, 0); this.r3.localClippingEnabled = true; this.r3.toneMapping = THREE.ACESFilmicToneMapping; this.r3.toneMappingExposure = 1.05;
+    // image-based lighting (a neutral studio room) so the nitinol, pericardium and fabric read as real materials; one PMREM per GL context
+    const mkEnv = (r) => { try { const pm = new THREE.PMREMGenerator(r); pm.compileEquirectangularShader(); const t = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); return t; } catch (e) { return null; } };
+    this.env3 = mkEnv(this.r3); this.envMon = mkEnv(this.rMon); world.scene.environmentIntensity = 0.85;
     this.cam3 = new THREE.PerspectiveCamera(34, 1, 1, 3000);
     this.controls = new OrbitControls(this.cam3, dom.td);
     this.controls.enableDamping = true; this.controls.dampingFactor = 0.12; this.controls.enablePan = false; this.controls.enabled = false;
@@ -97,12 +102,14 @@ export class Views {
     const cm = this.camMon; cm.left = -this.fov * aspect; cm.right = this.fov * aspect; cm.top = this.fov; cm.bottom = -this.fov; cm.updateProjectionMatrix();
     cm.up.copy(this.up); if (Math.abs(this.up.dot(b)) > 0.98) cm.up.set(0, 0, 1);
     cm.position.copy(this.center).addScaledVector(b, 700); cm.lookAt(this.center); cm.updateMatrixWorld(true);
+    // native cusps are crushed against the root wall as the inflow lattice opens: fade them with the expansion at the annulus
+    { const e = this.dev.eAt ? this.dev.eAt(8) : 0; const op = 0.62 * (1 - 0.85 * e); for (const k in this.W.cuspMeshes) { const m = this.W.cuspMeshes[k].userData.matAnat; if (m) { m.opacity = op; m.transparent = true; m.depthWrite = false; } } }
     // root bounce
     this.W.rootGroup.position.copy(this.F.n).multiplyScalar(S.rootDelta || 0);
     // contrast uniforms
     this.updateContrast();
     // 3D panel camera
-    const dist = this.fov * 2.9 / Math.tan(this.cam3.fov * D2R / 2) / 2.9 * 1.15;
+    const dist = this.fov / Math.tan(this.cam3.fov * D2R / 2) * (this.rootMode ? 0.95 : 1.15);
     if (this.lock) { this.cam3.up.copy(cm.up); this.cam3.position.copy(this.center).addScaledVector(b, dist); this.cam3.lookAt(this.center); this.controls.target.copy(this.center); }
     else { const delta = this.center.clone().sub(this.controls.target); this.cam3.position.add(delta); this.controls.target.copy(this.center); this.controls.update(); }
   }
@@ -133,20 +140,20 @@ export class Views {
     // --- monitor ---
     wallClip.normal.copy(this.camMon.getWorldDirection(new THREE.Vector3())); wallClip.constant = -wallClip.normal.dot(this.center);
     if (this.mode === 'fluoro') {
-      reg.setMode('flu'); scene.background = null;
+      reg.setMode('flu'); scene.background = null; scene.environment = null;
       this.rMon.setRenderTarget(this.rt); this.rMon.setClearColor(0x000000, 1); this.rMon.clear(); this.rMon.render(scene, this.camMon);
       this.rMon.setRenderTarget(null);
       this.postMat.uniforms.uTime.value = t; this.postMat.uniforms.uFail.value = S.fx ? 1 : 0;
       this.rMon.render(this.postScene, this.postCam);
     } else {
-      reg.setMode('anat'); reg.setCutaway(this.cutaway);
+      reg.setMode('anat'); reg.setCutaway(this.cutaway); scene.environment = this.envMon;
       scene.background = new THREE.Color(0x0b1220); this.rMon.setClearColor(0x0b1220, 1); this.rMon.render(scene, this.camMon);
     }
     // --- 3D panel ---
-    reg.setMode('anat'); reg.setCutaway(this.cutaway); scene.background = new THREE.Color(0x0d1420);
+    reg.setMode('anat'); reg.setCutaway(this.cutaway); scene.background = null; scene.environment = this.env3;
     const v3 = new THREE.Vector3(); this.cam3.getWorldDirection(v3); wallClip.normal.copy(v3); wallClip.constant = -v3.dot(this.center);
     this.r3.render(scene, this.cam3);
-    scene.background = null;
+    scene.background = null; scene.environment = null;
     this.drawOverlay(t);
   }
   proj(p, out = new THREE.Vector3()) {
@@ -203,9 +210,9 @@ export class Views {
       if (S.phase >= 4 && S.phase <= 7) {
         L.push(`Marker vs annulus: ${S.sysZ().toFixed(1)} mm`);
         if (S.phase >= 5) {
-          const nccTxt = `NCC inflow: ${d.h.toFixed(1)} mm below annulus (good 3-4.5)`;
+          const vd = PHd.depthVerdict(d.h); const nccTxt = `NCC inflow: ${d.h.toFixed(1)} mm below annulus - ${vd.text}`;
           if (S.phase === 5 || vi.cuspOverlap) L.push(nccTxt);
-          if (vi.threeCusp && S.phase >= 6) L.push(`Left cusp inflow: ${(d.h - d.tilt).toFixed(1)} mm`);
+          if (vi.threeCusp && S.phase >= 6) L.push(`Left cusp inflow: ${(d.h - d.tilt).toFixed(1)} mm - ${PHd.depthVerdict(d.h - d.tilt).text}`);
           L.push(`Root motion: +/-${Math.abs(S.v.bounceAmp || 0).toFixed(1)} mm   pacing: ${S.pacing}`);
         }
         L.push(`Post offset: ${S.alignErr().toFixed(0)} deg   centre: ${d.lat.toFixed(1)} mm`);

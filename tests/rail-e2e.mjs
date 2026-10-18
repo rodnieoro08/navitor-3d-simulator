@@ -97,8 +97,8 @@ await page.evaluate(() => { __drv.deployTo(0.3); });
 // ---- Vision markers: 3 mm above the inflow edge, exactly in line with the posts (partial deployment, unreleased: markers on the bending capsule frame)
 { const m = await page.evaluate(() => {
     const dv = __sim.views.dev, S = __sim.sim, T = __sim.THREE; __sim.pause(true); S.update(1 / 30); dv.cl.reset(); dv.update(S, 0); dv.update(S, 0);
-    const C = new T.Vector3(), E1 = new T.Vector3(), E2 = new T.Vector3(), Tn = new T.Vector3(), C0 = new T.Vector3(); const res = { az: [], paz: [], h: [], kz: dv.kz, markerU: 3 };
-    const U = (u) => { dv.frameU(u, dv.ld, C, E1, E2, Tn); return { c: C.clone(), e1: E1.clone(), e2: E2.clone(), t: Tn.clone() }; };
+    const C = new T.Vector3(), E1 = new T.Vector3(), E2 = new T.Vector3(), Tn = new T.Vector3(), C0 = new T.Vector3(); const res = { az: [], paz: [], h: [], kz: dv.kz, z3: dv.zAt(3), markerU: 3 };
+    const U = (u) => { dv.frameU(u, C, E1, E2, Tn); return { c: C.clone(), e1: E1.clone(), e2: E2.clone(), t: Tn.clone() }; };
     const fr0 = U(0);
     for (let k = 0; k < 3; k++) {
       const mp = new T.Vector3().setFromMatrixPosition(dv.vision[k].matrix); const fm = U(3); const dm = mp.clone().sub(fm.c); res.az.push(Math.atan2(dm.dot(fm.e2), dm.dot(fm.e1)) * 180 / Math.PI);
@@ -110,10 +110,10 @@ await page.evaluate(() => { __drv.deployTo(0.3); });
   const dAz = m.az.map((a, k) => Math.abs(wrap(a - m.paz[k])));
   ok(Math.max(...dAz) < 0.6, `Vision marker azimuths equal the commissural post azimuths (max diff ${Math.max(...dAz).toFixed(2)} deg; markers ${m.az.map(a => a.toFixed(1))}, posts ${m.paz.map(a => a.toFixed(1))})`);
   ok(Math.abs(wrap(m.az[1] - m.az[0]) - 120) < 0.6 && Math.abs(wrap(m.az[2] - m.az[1]) - 120) < 0.6, 'the three Vision markers are 120 degrees apart');
-  ok(m.h.every(h => Math.abs(h - 3 * m.kz) < 0.12), `marker centre height = 3 mm above the inflow edge (x foreshortening ${m.kz.toFixed(2)}): ${m.h.map(h => h.toFixed(2))} mm`);
+  ok(m.h.every(h => Math.abs(h - m.z3) < 0.12), `marker centre height = 3 mm above the inflow edge (crimped-lattice stretch -> ${m.z3.toFixed(2)} mm axial): ${m.h.map(h => h.toFixed(2))} mm`);
   const fl = await page.evaluate(() => { const dv = __sim.views.dev; return dv.vision.map(v => v.userData.matFlu.color.r); }); ok(fl.every(a => a >= 0.9), 'Vision markers are the most radiopaque element in fluoro');
   const lg = await page.evaluate(() => { const dv = __sim.views.dev; return { feet: dv.feet.count, beads: dv.beads.count, eyelets: dv.eyelets.count, cuff: dv.cuff.userData.nu, leaflets: dv.leaf.length }; });
-  ok(lg.feet === 9 && lg.beads === 3 && lg.eyelets === 6, `frame details: ${lg.feet} rim feet + 3 markers, ${lg.beads} post-tip beads, ${lg.eyelets} eyelet blocks`);
+  ok(lg.feet === 9 && lg.beads === 3 && lg.eyelets === 3, `frame details: ${lg.feet} inflow eyelets, ${lg.beads} retainer tabs, ${lg.eyelets} commissure attachment features`);
   await page.evaluate(() => __sim.pause(false)); }
 await page.evaluate(() => { __drv.toLock(); __drv.secondView(); });
 await checkPose('phase 6/7 (valve at lock)');

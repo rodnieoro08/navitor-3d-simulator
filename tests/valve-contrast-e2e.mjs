@@ -66,7 +66,7 @@ await page.evaluate(() => { __drv.goPhase1(); __drv.goDesc(); __drv.setRotation(
 await page.evaluate(() => { __sim.sim.act.setCarm(-30, -30); });
 await page.waitForTimeout(1500);
 const nStruts = async () => page.evaluate(() => { const d = __sim.views.dev; return { count: d.struts.count, vis: d.struts.visible, nC: d.nC, rows: d.nRows }; });
-let q = await nStruts(); ok(q.nC === 12 && q.rows === 4, `frame: ${q.nC} dense inflow cells + 6 large elongated outflow cells in ${q.rows} rows (not a uniform mesh)`);
+let q = await nStruts(); ok(q.nC === 9 && q.rows === 4, `frame: ${q.nC}-cell inflow lattice (IFU: look for all 9 struts) + large crown cells, ${q.rows} node rows`);
 await page.evaluate(() => __drv.deployTo(0.5)); await page.waitForTimeout(800); q = await nStruts(); ok(q.count > 0 && q.count <= 276, 'partial deployment: frame struts rendered (' + q.count + ' segments)');
 const rad = async () => page.evaluate(() => { const d = __sim.views.dev, f = __sim.sim.dev.f, ld = f * 40 + 9 * Math.max(0, Math.min(1, (f - 0.85) / 0.15)); return [d.rAt(2, ld), d.rAt(38, ld)]; });
 let r = await rad(); ok(r[0] > r[1] - 0.001 && r[0] > 11, `inflow opens first at 50% (inflow r ${r[0].toFixed(1)} mm vs outflow still crimped r ${r[1].toFixed(1)} mm)`);

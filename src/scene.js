@@ -182,8 +182,9 @@ export function buildScene(F, P) {
     const aa = g.attributes.position, sArr = new Float32Array(aa.count); for (let i = 0; i < aa.count; i++) sArr[i] = (aa.getY(i) + 9) / 18; g.setAttribute('aS', new THREE.BufferAttribute(sArr, 1));
     { const f = lumenMat('jet', true); add(m, { anat: lumenAnat('jet', true), flu: f, group: 'root' }, rootGroup); } }
   // ---- lights ----
-  scene.add(new THREE.AmbientLight(0xffffff, 0.75));
-  const d1 = new THREE.DirectionalLight(0xffffff, 1.2); d1.position.set(200, 300, 400); scene.add(d1);
-  const d2 = new THREE.DirectionalLight(0x88aaff, 0.5); d2.position.set(-300, -100, -200); scene.add(d2);
+  scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x3a2a2a, 0.55));
+  const d1 = new THREE.DirectionalLight(0xfff4e6, 1.9); d1.position.set(200, 300, 400); scene.add(d1);      // key (warm, from the detector side)
+  const d2 = new THREE.DirectionalLight(0x9fc0ff, 0.6); d2.position.set(-300, -100, -200); scene.add(d2);  // cool fill
+  const d3 = new THREE.DirectionalLight(0xffffff, 0.8); d3.position.set(-120, 320, -260); scene.add(d3);   // rim
   return { scene, reg, rootGroup, cuspMeshes, colors };
 }
