@@ -6,7 +6,7 @@ let pass = 0, bad = 0; const fails = [];
 const ok = (c, m) => { if (c) pass++; else { bad++; fails.push(m); } console.log((c ? '  ok   ' : '  FAIL ') + m); };
 fs.mkdirSync('shots/v6', { recursive: true });
 const { browser, page, logs } = await launch(mobile ? 390 : 1280, mobile ? 844 : 800, mobile);
-await page.goto('file:///workspace/navitor-3d-simulator/index.html'); await page.addScriptTag({ path: 'tests/drv.js' });
+await page.goto('file://'+process.cwd()+'/index.html'); await page.addScriptTag({ path: 'tests/drv.js' });
 await page.check('#ack'); await page.click('#startBtn'); await page.waitForTimeout(600);
 const view = async (v) => { if (mobile) { await page.locator(`#viewtabs button[data-vt=${v}]`).click(); await page.waitForTimeout(400); } };
 // set a flex value, let the sim derive the lateral offset, rebuild the device with no temporal lag, then measure containment + bend
@@ -15,7 +15,7 @@ const probe = (flex) => page.evaluate((flex) => {
   const c = dv.containment(); const cl = dv.cl; const kz = dv.kz || 1;
   // sagitta (mm) of the capsule centreline and of the three posts' mean line over the posts' length
   const sag = (pt) => { const n = pt.length; const A = pt[0], B = pt[n - 1]; const ab = B.clone().sub(A), L2 = ab.lengthSq(); let m = 0; for (const p of pt) { const t = p.clone().sub(A).dot(ab) / L2; m = Math.max(m, p.clone().sub(A.clone().addScaledVector(ab, t)).length()); } return m; };
-  const capPts = [], postPts = []; for (let i = 0; i < 9; i++) { capPts.push(cl.at(dv.constructor.name && 22 + (14 + 26 * i / 8) * kz)); const m = new __sim.THREE.Vector3(); for (let k = 0; k < 3; k++) m.add(dv.postPts[k][i]); postPts.push(m.multiplyScalar(1 / 3)); }
+  const capPts = [], postPts = []; for (let i = 0; i < 9; i++) { capPts.push(cl.at(22 + dv.zAt(24 * i / 8))); const m = new __sim.THREE.Vector3(); for (let k = 0; k < 3; k++) m.add(dv.postPts[k][i]); postPts.push(m.multiplyScalar(1 / 3)); }
   return { ld: dv.ld, n: c.n, total: c.total, margin: c.minMargin, worst: c.worst, lat: S.dev.lat, f: S.dev.f, capSag: sag(capPts), postSag: sag(postPts), maxTurn: cl.maxTurn, rel: dv.rel };
 }, flex);
 const FLEX = [0, 0.25, 0.5, 0.75, 1];

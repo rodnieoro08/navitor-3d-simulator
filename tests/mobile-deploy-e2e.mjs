@@ -6,7 +6,7 @@ const prof = process.argv[2] || 'phone'; const mobile = prof === 'phone';
 let pass = 0, bad = 0; const ok = (c, m) => { if (c) pass++; else bad++; console.log((c ? '  ok   ' : '  FAIL ') + m); };
 fs.mkdirSync('shots/v8', { recursive: true });
 const { browser, page } = await launch(mobile ? 390 : 1280, mobile ? 844 : 800, mobile);
-await page.goto('file:///workspace/navitor-3d-simulator/index.html'); await page.addScriptTag({ path: 'tests/drv.js' });
+await page.goto('file://'+process.cwd()+'/index.html'); await page.addScriptTag({ path: 'tests/drv.js' });
 await page.check('#ack'); await page.click('#startBtn'); await page.waitForTimeout(600);
 await page.evaluate(() => { __drv.goPhase1(); __drv.goDesc(); __drv.setRotation(); __drv.goArch(); __drv.goCross(); __drv.alignAt(); __sim.setAngles(-30, -30); __drv.press(); });
 await page.waitForTimeout(1200);

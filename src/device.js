@@ -55,10 +55,10 @@ export class Device {
     // ---------------- materials (anatomy / 3D view) ----------------
     this.matA = {
       sheath: phys({ color: 0x3f8fe8, roughness: 0.35, metalness: 0.0, clearcoat: 0.6, clearcoatRoughness: 0.2, transparent: true, opacity: 0.55 }),
-      outerShaft: phys({ color: 0x2f6fd0, roughness: 0.4, metalness: 0.05, clearcoat: 0.5 }),
+      outerShaft: phys({ color: 0x2f6fd0, roughness: 0.4, metalness: 0.05, clearcoat: 0.5, transparent: true, opacity: 0.68 }),
       capsule: phys({ color: 0xf4f7fb, roughness: 0.42, metalness: 0.0, clearcoat: 0.35, clearcoatRoughness: 0.3, transparent: true, opacity: 0.72 }),
       innerShaft: phys({ color: 0xf3f5f8, roughness: 0.5 }),
-      nosecone: phys({ color: 0xffffff, roughness: 0.32, clearcoat: 0.7, clearcoatRoughness: 0.2 }), noseOutline: anatMat(0x1b2431, 0.45, { rough: 1, metal: 0 }), tipHole: anatMat(0x04100e, 1),
+      nosecone: phys({ color: 0xffffff, roughness: 0.32, clearcoat: 0.7, clearcoatRoughness: 0.2, transparent: true, opacity: 0.78 }), noseOutline: anatMat(0x1b2431, 0.45, { rough: 1, metal: 0 }), tipHole: anatMat(0x04100e, 1),
       capsuleMarker: phys({ color: 0xcfa14a, roughness: 0.3, metalness: 1.0 }), innerMarker: phys({ color: 0xd98a3f, roughness: 0.3, metalness: 1.0 }),
       vision: phys({ color: 0x6f7378, roughness: 0.35, metalness: 1.0 }), visionCross: phys({ color: 0xb8bcc2, roughness: 0.3, metalness: 1.0 }),
       posts: phys({ color: 0xd5dae1, roughness: 0.3, metalness: 1.0 }),
@@ -67,7 +67,7 @@ export class Device {
       leaflets: phys({ color: 0xe9dfb9, roughness: 0.48, metalness: 0, sheen: 0.45, sheenRoughness: 0.5, sheenColor: 0xfff3d6, clearcoat: 0.25, clearcoatRoughness: 0.4, transparent: true, opacity: 0.96, map: pericardiumTexture() }),
       frame: phys({ color: 0xdadfe6, roughness: 0.26, metalness: 1.0 }), foot: phys({ color: 0xc9ced6, roughness: 0.3, metalness: 1.0 }), bead: phys({ color: 0xe2e6ec, roughness: 0.22, metalness: 1.0 }),
     };
-    for (const k of ['sheath', 'capsule', 'cuff', 'cuffIn', 'leaflets']) this.matA[k].depthWrite = this.matA[k].opacity >= 0.95;
+    for (const k of ['sheath', 'capsule', 'cuff', 'cuffIn', 'leaflets', 'outerShaft', 'nosecone']) this.matA[k].depthWrite = this.matA[k].opacity >= 0.95;
     this.cl = new Centreline(F, P.path);
     const tube = (id, maxRings, anat, flu, radial = 14) => { const t = new VarTube(maxRings, radial); const m = new THREE.Mesh(t.geo, anat); m.userData.part = id; scene.add(m); reg.add(m, { anat, flu, group: 'device' }); this.parts[id].push(m); m.userData.tube = t; return t; };
     this.tSheath = tube('sheath', 520, this.matA.sheath, fluTube(0.045, 0.45));
@@ -285,9 +285,9 @@ export class Device {
       this.eyelets.count = ne; this.eyelets.instanceMatrix.needsUpdate = true; this.eyelets.userData.show = true; this.eyeSlots.count = nsl; this.eyeSlots.instanceMatrix.needsUpdate = true; this.eyeSlots.userData.show = true;
       // retainer tabs: short neck + paddle on the three crown peaks
       for (let p = 0; p < 3; p++) { const nd = this.nodes[this.tabIdx[p]]; const ee = this.eAt(G.freeLen - 1);
-        this.vp(nd.u + 0.6, roll + nd.psi, cv); this.vp(nd.u + G.tabMm - 0.5, roll + nd.psi, mid); this.frameU(nd.u + 1, fC, fE1, fE2, fT);
+        const rT = this.rAt(nd.u) - 0.3 * (1 - ee); this.vp(nd.u + 0.6, roll + nd.psi, rT, cv); this.vp(nd.u + G.tabMm - 0.5, roll + nd.psi, rT, mid); this.frameU(nd.u + 1, fC, fE1, fE2, fT);
         dir.copy(mid).sub(cv); const L = dir.length() || 1; dir.normalize(); q.setFromUnitVectors(up, dir); m5.compose(cv.clone().lerp(mid, 0.5), q, sc.set(0.3, L, 0.3)); this.tabNecks.setMatrixAt(p, m5);
-        m5.makeScale(0.62, 0.62, 0.5); m5.setPosition(mid); this.beads.setMatrixAt(p, m5); }
+        m5.makeScale(0.62 * lerp(0.6, 1, ee), 0.62, 0.5 * lerp(0.6, 1, ee)); m5.setPosition(mid); this.beads.setMatrixAt(p, m5); }
       this.beads.count = 3; this.beads.instanceMatrix.needsUpdate = true; this.beads.userData.show = true; this.tabNecks.count = 3; this.tabNecks.instanceMatrix.needsUpdate = true; this.tabNecks.userData.show = true;
     }
     // CAF spine tubes along each commissure line (inflow rim -> CAF), used by tests for the commissure azimuth, drawn as the slightly heavier commissure strut

@@ -82,7 +82,7 @@ export class Views {
   updateTarget(snap = false) {
     const S = this.sim, lm = S.lm, path = S.path, F = this.F, d = S.dev;
     const ph = S.phase;
-    const root = F.n.clone().multiplyScalar(8);
+    const root = F.n.clone().multiplyScalar(ph >= 5 ? 16 : 8);   // once the valve is being deployed, centre on the 48 mm frame rather than the annulus
     let c, fov, rootMode;
     const nearRoot = d.s > lm.ann - 85;
     if (ph >= 4 && ph <= 7 || (ph === 8 && nearRoot) || (ph === 9 && !S.flags.wireRemoved) || S.finished) { c = root; fov = 40; rootMode = true; }

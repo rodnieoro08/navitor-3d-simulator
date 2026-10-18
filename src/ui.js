@@ -237,7 +237,7 @@ export class UI {
         <text id="tWhite" x="${L.white / 2}" y="${L.ty1}" text-anchor="middle" fill="#223" font-size="${L.tfs}">white zone: re-sheath possible</text><text id="tGray" x="${L.white + L.gray / 2 + 12}" y="${L.ty1}" text-anchor="middle" fill="#fff" font-size="${L.tfs - 0.5}">gray: no return</text>
         <rect id="fillBar" x="0" y="${L.h}" width="0" height="${L.fillH}" fill="#4fc3ff"/><path id="caret" d="${L.caret}" fill="#ffd24a"/>
         <g id="lockIcon" transform="${L.icon}" style="cursor:pointer"><circle cx="0" cy="10" r="15" fill="url(#hgLock)" stroke="#8a6a1e" stroke-width="1.2"/><rect id="lockBody" x="-7" y="9" width="14" height="10" rx="2" fill="#2a2110"/><path id="lockShackle" d="M-4.5 9 v-3.5 a4.5 4.5 0 0 1 9 0 v3.5" fill="none" stroke="#2a2110" stroke-width="2.4"/></g>
-        <text id="tLockHint" x="${L.white}" y="${L.hintY}" text-anchor="middle" fill="#ffd24a" font-size="${L.hfs2}">lock engages at the gray zone: press the lock button to release</text></g>
+        <text id="tLockHint" x="${(L.white + L.gray) / 2}" y="${L.hintY}" text-anchor="middle" fill="#ffd24a" font-size="${L.hfs2}">lock engages at the gray zone - press the lock to release</text></g>
     </svg>`;
   }
   // ---------- handle diagram (SVG) ----------
