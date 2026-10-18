@@ -7,7 +7,7 @@ let pass = 0, bad = 0; const fails = [];
 const ok = (c, m) => { if (c) pass++; else { bad++; fails.push(m); } console.log((c ? '  ok   ' : '  FAIL ') + m); };
 fs.mkdirSync('shots/v5', { recursive: true });
 const { browser, page, logs } = await launch(mobile ? 390 : 1280, mobile ? 844 : 800, mobile);
-await page.goto('file:///workspace/navitor-3d-simulator/index.html'); await page.addScriptTag({ path: 'tests/drv.js' });
+await page.goto('file://'+process.cwd()+'/index.html'); await page.addScriptTag({ path: 'tests/drv.js' });
 await page.check('#ack'); await page.click('#startBtn'); await page.waitForTimeout(600);
 // geometry readout from the live device: max turning angle of the centreline AND of every tube (ring-to-ring), per-frame jitter
 const geo = () => page.evaluate(() => {

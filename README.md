@@ -1,4 +1,4 @@
-> **Unofficial training model only.** Not an Abbott product, not the Navitor IFU, and not medical advice. No Abbott logos or certification are implied. Physics values are uncalibrated teaching estimates.
+> **Unofficial training model only.** Not an Abbott product, not the Navitor IFU, and not medical advice. No Abbott logos or certification are implied. Geometry comes from the published IFU and training deck; forces and friction are uncalibrated teaching estimates.
 
 ![Handle and lock at 80%](docs/desktop-good-lock80-handle-feel.png)
 
@@ -12,40 +12,62 @@ Unofficial training model. Not an Abbott product, not the Navitor IFU, not medic
 * Tests: `node tests/logic.mjs` (pure logic, all gates and failure paths), `node tests/e2e.mjs desktop|phone` (Playwright + screenshots into shots/final).
 * Debug hook: `window.__sim` (state, setAngles, act.*, hold, step, ...).
 
-## Physics model: teaching estimates, uncalibrated
+## Physics model (v16): published geometry, estimated forces
 
-Deployment and seating live in `src/physics.js` (pure, deterministic, unit-tested in `tests/physics.mjs`). **No manufacturer data was used.** Every constant is an *estimate (uncalibrated)* chosen only so the qualitative behaviour feels right; none of them are real device values.
+Deployment and seating live in `src/physics.js` (pure, deterministic, unit-tested in `tests/physics.mjs`). Every constant now carries a provenance tag: **IFU** (9 values from the Navitor Instructions for Use, ARTMT600362847 A), **training deck** (10 values from the Navitor Vision / FlexNav training deck), **derived** (6 values computed from that geometry) and **estimate (uncalibrated)** (43 teaching estimates: forces, friction, pacing factors, handle feel - the published documents give dimensions and rules, not force curves).
 
-- Wheel = capsule retraction in mm (turns-per-mm mapping; 100% = full retraction). Progressive, inflow-first frame expansion with foreshortening (the frame shortens as it opens), radial force/grip from the 27 mm-in-24 mm oversize, and hysteresis between deployment and resheath.
-- Seating: NCC-side and left-cusp-side inflow depth are computed separately (tilt, root motion, forward pressure, wire tension, wire stiffness) with stick-slip friction against the native leaflets/calcium (the frame can hang up, then jump), a membranous-septum soft stop, pacing-dependent root motion/ejection drag, migration when the wheel is too fast (direction = sign of the net force), spring-back pop past the point of no return and at release.
-- Recapture: resistance rises toward the 80% lock (feel gauge in the handle diagram); no recapture past the lock.
-- Depth semantics unchanged: 3 to 4.5 mm below the annulus is good.
+- **Valve**: 27 mm Navitor Vision (NVRO-27) in a 24 mm annulus (labelled range 23-25 mm). Stent height 48 mm, commissure height 24 mm, inflow lattice of 9 cells with 8 mm half cells, outer cuff 10 mm, inflow and outflow diameter 27 mm, aortic crown 44 mm free (constrained by the aortic root in situ), three tantalum Vision markers 3 mm above the inflow edge under the commissures, three retainer tabs. Delivery system: FlexNav LG, 6.3 mm capsule (15 F equivalent), 107 cm working length.
+- **Derived geometry**: a laser-cut strut keeps its length when it is crimped, so the crimped axial pitch of each lattice row follows from the expanded pitch and the capsule bore: strut 9.28 mm, inflow lattice stretched x1.155 when crimped, crimped stent 52.2 mm (vs 48 expanded, about 4.2 mm of foreshortening, all of it in the inflow lattice), capsule travel 54.4 mm to free the tabs. A cell opens over one crimped half cell of capsule travel (its upper node must clear the mouth); the crown springs open over a shorter travel once the mouth passes it.
+- **Procedure rules from the IFU / deck**: target depth 3 mm (the readouts and the proctor sheet say "target 3, up to 4.5"); NCC depth below the membranous septum length but not below 3 mm; at most two re-sheaths before final release (the third is called out and scored); controlled pacing 90-130 bpm during unsheathing if needed; the lock button engages at the gray zone of the indicator; landing too low on the left cusp -> gentle push on the LV wire / forward push on the system tilts the valve to the outer curve, too high -> gently pull the system back (modelled as tilt couplings).
+- **Still estimates**: wheel turns per mm, safe wheel speeds, annulus compliance, hysteresis, chronic outward force (shape from the deck: consistent, slightly falling with diameter), grip, seating drop, friction / stick-slip, root motion, migration, spring-back and the recapture feel.
+- Wheel = capsule retraction in mm (turns-per-mm mapping; 100% = full retraction). Progressive, inflow-first frame expansion with foreshortening, radial force/grip from the 27 mm-in-24 mm oversize, hysteresis between deployment and re-sheath. Seating: NCC-side and left-cusp-side inflow depth are computed separately (tilt, root motion, forward pressure, wire tension, wire stiffness) with stick-slip friction against the native leaflets/calcium, a membranous-septum soft stop, pacing-dependent root motion/ejection drag, migration when the wheel is too fast, spring-back pop past the point of no return and at release. Recapture: resistance rises toward the lock; no recapture past it.
 
-| constant | value | unit | meaning | status |
+| constant | value | unit | meaning | source |
 |---|---|---|---|---|
-| capsuleTravelMm | 52 | mm | capsule retraction needed to fully unsheathe (100% on the wheel) | estimate (uncalibrated) |
+| valveMm | 27 | mm | Navitor Vision valve size (NVRO-27) | IFU |
+| annulusRangeMm | 23-25 | mm | labelled annulus diameter range for the 27 mm valve (case annulus 24 mm) | IFU |
+| stentHeightMm | 48 | mm | stent height excluding the retainer tabs, fully expanded | training deck |
+| commissureHeightMm | 24 | mm | height of the commissure attachment feature above the inflow edge | training deck |
+| halfCellHeightMm | 8 | mm | half cell height of the inflow lattice (the 3 mm target depth is below the first node row) | training deck |
+| cuffHeightMm | 10 | mm | height of the NaviSeal outer cuff | training deck |
+| inflowDiaMm | 27 | mm | valve inflow diameter (non-flared annulus section) | training deck |
+| outflowDiaMm | 27 | mm | valve outflow diameter at the leaflets | training deck |
+| aorticStentDiaMm | 44 | mm | free diameter of the aortic crown (constrained by the aorta in situ) | training deck |
+| markerHeightMm | 3 | mm | Vision tantalum markers sit this far above the inflow edge, one under each commissure | IFU |
+| inflowStruts | 9 | - | cells / struts around the inflow ("look for all 9") | training deck |
+| retainerTabs | 3 | - | retainer tabs held in the retainer receptacle until full deployment | IFU |
+| capsuleOdMm | 6.3 | mm | FlexNav LG valve capsule outer diameter (15 F equivalent) | IFU |
+| workingLengthCm | 107 | cm | FlexNav delivery system working length | IFU |
+| targetDepthMm | 3 | mm | target implant depth of the inflow edge below the annulus (NCC depth < membranous septum length but not < 3 mm) | IFU |
+| maxResheaths | 2 | - | do not re-sheath more than two times before final release | IFU |
+| frameCrimpRadiusMm | 2.6 | mm | crimped frame radius = capsule bore (OD - 2 x wall) with running clearance | derived from published geometry |
+| strutLenMm | 9.28 | mm | length of one inflow-lattice strut (9 cells of 27 mm circumference, 8 mm half cell) | derived from published geometry |
+| stretchLower | 1.16 | - | crimped / expanded axial pitch of the inflow lattice (struts keep their length) | derived from published geometry |
+| frameCrimpLenMm | 52.2 | mm | crimped stent length (inflow lattice stretched, crown posts straightened) | derived from published geometry |
+| frameFreeLenMm | 48 | mm | expanded stent length (= stent height) | training deck |
+| capsuleTravelMm | 54.4 | mm | capsule retraction that frees the retainer tabs (100% on the wheel) | derived from published geometry |
+| releaseRampMm | 9.2 | mm | a cell opens over one crimped half-cell of capsule travel (its upper node must clear the mouth) | derived from published geometry |
+| frameFreeRadiusMm | 13.5 | mm | free inflow radius | training deck |
+| annulusRadiusMm | 12 | mm | native annulus radius of this case (24 mm annulus, inside the 23-25 mm range) | IFU |
 | wheelTurnsFull | 5 | turns | wheel turns for full retraction -> turns per mm = wheelTurnsFull / capsuleTravelMm | estimate (uncalibrated) |
-| lockFraction | 0.8 | - | 80% stop: lock engages here; recapture is only possible below it | estimate (uncalibrated) |
-| safeSpeedMmS | 4.4 | mm/s | capsule retraction speed below 80% that stays controlled (about 0.085 of travel per s) | estimate (uncalibrated) |
-| safeSpeedPost80MmS | 3.9 | mm/s | same, after the lock (outflow ring releasing: about 0.075 of travel per s) | estimate (uncalibrated) |
-| frameCrimpLenMm | 46 | mm | axial length of the frame crimped in the capsule (longer than expanded) | estimate (uncalibrated) |
-| frameFreeLenMm | 40 | mm | axial length of the fully expanded frame (foreshortened) | estimate (uncalibrated) |
-| releaseRampMm | 6 | mm | capsule travel over which one frame section goes from crimped to open (progressive) | estimate (uncalibrated) |
-| frameFreeRadiusMm | 13.5 | mm | free (unconstrained) inflow radius of the 27 mm valve | estimate (uncalibrated) |
-| frameCrimpRadiusMm | 3.3 | mm | crimped radius | estimate (uncalibrated) |
-| annulusRadiusMm | 12 | mm | native annulus radius (24 mm case annulus) | estimate (uncalibrated) |
-| annulusCompliance | 0.25 | - | fraction of oversize the annulus yields to (calcified annulus: stiff) | estimate (uncalibrated) |
+| lockFraction | 0.8 | - | partial deployment lock: the wheel clicks and the lock button must be pressed to continue; no recapture past it (gray zone) | estimate (uncalibrated) |
+| safeSpeedMmS | 4.4 | mm/s | capsule retraction speed below the lock that stays controlled ("slowly and steadily") | estimate (uncalibrated) |
+| safeSpeedPost80MmS | 3.9 | mm/s | same, after the lock (crown releasing: "release the valve slowly") | estimate (uncalibrated) |
+| annulusCompliance | 0.25 | - | fraction of the oversize the calcified annulus yields to | estimate (uncalibrated) |
 | hysteresisMm | 4 | mm | play of the frame: on resheath it stays open until the capsule has travelled this far back | estimate (uncalibrated) |
-| radialForceN_perMm | 6 | N/mm | radial force per mm of oversize at full expansion | estimate (uncalibrated) |
-| gripForceScaleN | 8 | N | radial force at which the frame grips ~63% (grip = 1-exp(-F/scale)) | estimate (uncalibrated) |
-| seatDropMm | 4.1 | mm | depth the inflow edge settles to below the annulus once the frame wedges in the root | estimate (uncalibrated) |
-| foreshortCouplingMm | 0.35 | - | fraction of the frame shortening that pulls an UN-gripped inflow edge up toward the aorta | estimate (uncalibrated) |
+| cofRefN | 42 | N | chronic outward force of the 27 mm frame at the bottom of its range (23 mm) | estimate (uncalibrated) |
+| cofSlopePerMm | 0.06 | 1/mm | relative fall of the chronic outward force per mm of annulus diameter across the use range | estimate (uncalibrated) |
+| gripForceScaleN | 26 | N | radial force at which the frame grips ~63% (grip = 1-exp(-F/scale)) | estimate (uncalibrated) |
+| seatDropMm | 3.7 | mm | depth the inflow edge settles to below the annulus once the frame wedges in the root ("the valve may descend slightly toward 3 mm") | estimate (uncalibrated) |
+| foreshortCouplingMm | 0.35 | - | fraction of the inflow-lattice shortening that pulls an UN-gripped inflow edge up toward the aorta (tabs are fixed) | estimate (uncalibrated) |
 | kPressMm | 1.8 | mm per unit | depth shift per unit of system forward pressure above/below neutral (0.5) | estimate (uncalibrated) |
 | kWireMm | 1.5 | mm per unit | depth shift per unit of wire tension above/below neutral (0.3), at wire stiffness 1.0 | estimate (uncalibrated) |
-| wireStiffness | 1 | - | default wire stiffness factor (1 = standard; >1 stiffer: more tension transmitted, straighter root) | estimate (uncalibrated) |
+| wireStiffness | 1 | - | default wire stiffness factor (1 = pre-shaped super stiff; >1 stiffer) | estimate (uncalibrated) |
 | kStiffTiltMm | 0.35 | mm | extra NCC-vs-left-cusp tilt per +1.0 of wire stiffness above 1.0 (straightened root) | estimate (uncalibrated) |
 | tiltPerInstabilityMm | 0.7 | mm | tilt added at zero stability (poor pressure / wire tension) | estimate (uncalibrated) |
 | tiltPerLateralMm | 0.06 | mm/mm | tilt added per mm of lateral offset of the shaft | estimate (uncalibrated) |
+| kWirePushTiltMm | 0.9 | mm | a gentle push on the LV wire tilts the valve to the outer curve: left-cusp side rises (deck, LCC landing too low) | estimate (uncalibrated) |
+| kSysTiltMm | 0.8 | mm | forward push on the system tilts to the outer curve (left cusp up); pulling it back tilts to the inner curve (left cusp down) | estimate (uncalibrated) |
 | septumDepthMm | 5 | mm | NCC depth at which the frame meets the membranous septum (soft stop) | estimate (uncalibrated) |
 | septumStiffness | 0.4 | - | fraction of the further push that passes the septum stop | estimate (uncalibrated) |
 | fricBaseNcc | 0.12 | mm | static friction against the native NCC leaflet, before grip | estimate (uncalibrated) |
@@ -56,13 +78,13 @@ Deployment and seating live in `src/physics.js` (pure, deterministic, unit-teste
 | slipRatePerS | 7 | 1/s | how fast a slipping side closes the gap to its target | estimate (uncalibrated) |
 | rootAssistMm | 0.12 | mm per mm | root motion shakes the frame free: mm of break-away help per mm of root swing | estimate (uncalibrated) |
 | paceOff | 1 | - | root motion / ejection drag factor without pacing | estimate (uncalibrated) |
-| pace120 | 0.45 | - | factor at ~120 bpm pacing | estimate (uncalibrated) |
+| pace120 | 0.45 | - | factor at controlled pacing ~120 bpm (deck: 90-130 bpm during unsheathing if needed) | estimate (uncalibrated) |
 | paceRapid | 0.15 | - | factor at rapid pacing | estimate (uncalibrated) |
 | flowPushN | 0.9 | - | LV ejection push toward the aorta without pacing (scaled by pace factor) | estimate (uncalibrated) |
 | forwardPushN | 0.6 | - | resting forward push of the stiff system toward the LV | estimate (uncalibrated) |
 | netForceScale | 0.5 | - | scale of tanh() that turns net force into a migration direction | estimate (uncalibrated) |
 | migrationMmPerMmS | 0.23 | mm per (mm/s) per s | uncontrolled migration per mm/s of wheel speed above the safe speed | estimate (uncalibrated) |
-| popPerMmS | 0.2 | mm per (mm/s) | spring-back jump on the outflow ring per mm/s above the safe speed after the lock | estimate (uncalibrated) |
+| popPerMmS | 0.2 | mm per (mm/s) | spring-back jump of the crown per mm/s above the safe speed after the lock | estimate (uncalibrated) |
 | popUnpacedMm | 1.3 | mm | spring-back pop toward the aorta at release when the heart is not rapid-paced (case-card release) | estimate (uncalibrated) |
 | popRadialRelief | 0.3 | - | fraction of a pop absorbed by grip (pop x (1 - this x grip)) | estimate (uncalibrated) |
 | resheathBaseN | 4 | N | drag of the capsule sliding back over the shaft | estimate (uncalibrated) |
@@ -70,6 +92,9 @@ Deployment and seating live in `src/physics.js` (pure, deterministic, unit-teste
 | resheathLockRiseN | 22 | N | extra force that builds as the lock is approached | estimate (uncalibrated) |
 | resheathHystN | 5 | N | extra force on the way back (recapture hysteresis) | estimate (uncalibrated) |
 | resheathMaxN | 45 | N | force that fills the feel gauge | estimate (uncalibrated) |
+
+## Valve rendering (v16)
+The 3D valve is built from the same published geometry (`src/device.js`): a 9-cell nitinol diamond lattice (rectangular laser-cut struts, node joints, 9 inflow suture eyelets), three slotted commissure attachment features at 24 mm, a crown whose struts bow out to three tabbed peaks with free-ended inner arches between them, inner and outer NaviSeal polyethylene cuffs (woven texture, the outer cuff fills with the cardiac cycle once the valve is released), three bovine-pericardium leaflets that coapt before release and open and close with every beat afterwards, and three tantalum Vision markers with their crosshair relief 3 mm above the inflow edge under the commissures. Materials are physically based (metal nitinol, sheen fabric, pericardium) lit by an image-based studio environment with ACES tone mapping. The frame opens inflow first as the capsule mouth passes each cell, foreshortens only in the inflow lattice, is pinched by the annulus and holds its crown against the aortic root; in fluoro it is the familiar dark lattice with the three bright markers.
 
 ## Handle controls (v4)
 - **Deployment wheel**: clockwise = deploy, counter-clockwise = resheath (inside the white zone only).

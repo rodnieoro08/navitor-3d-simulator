@@ -11,7 +11,11 @@ const f2 = (x) => (+x).toFixed(2);
 
 console.log('== constants ==');
 const list = P.describeConstants();
-ok(list.length >= 40 && list.every(c => c.status === 'estimate (uncalibrated)'), `${list.length} constants, every one marked "estimate (uncalibrated)"`);
+const SRCS = ['IFU', 'training deck', 'derived from published geometry', 'estimate (uncalibrated)'];
+ok(list.length >= 40 && list.every(c => SRCS.includes(c.status)), `${list.length} constants, every one tagged with its provenance: ${JSON.stringify(P.countBySource())}`);
+ok(list.filter(c => c.status === 'estimate (uncalibrated)').length > 0 && list.filter(c => c.status === 'IFU').length >= 5, 'IFU values and uncalibrated estimates are both labelled');
+ok(Math.abs(C.frameCrimpLenMm - (P.GEOMETRY.lowerCrimp + P.GEOMETRY.upperCrimp)) < 0.11 && C.frameCrimpLenMm > C.frameFreeLenMm, `crimped length ${C.frameCrimpLenMm} mm is derived from the 48 mm expanded lattice (9 cells, 8 mm half cell, capsule bore)`);
+ok(Math.abs(P.expandedCoord(P.crimpCoord(17.3)) - 17.3) < 0.06, 'expanded <-> crimped axial coordinate round trip');
 ok(/uncalibrated/.test(P.PHYSICS_NOTE), 'physics note says uncalibrated: ' + P.PHYSICS_NOTE);
 ok(Object.isFrozen(C), 'CONSTANTS is frozen (single labelled object)');
 
@@ -106,7 +110,28 @@ console.log('== stable control lands 3-4.5 mm (sim) ==');
   const s4 = one(0.5, 0.3, 1.4, 'fast'); ok(s4.dev.tilt > s.dev.tilt, `extra-stiff wire tilts the valve more (tilt ${f2(s4.dev.tilt)} vs ${f2(s.dev.tilt)})`);
   const a = one(0.5, 0.3, 0, 'fast'), b = one(0.5, 0.3, 0, 'fast'); ok(a.flags.finalDepthNcc === b.flags.finalDepthNcc && a.flags.finalDepthLcc === b.flags.finalDepthLcc, 'deterministic: identical runs give identical depths');
   const sq = (()=>{ const s = new Sim(F, Pa); s.started = true; s.act.setCarm(0,0); __sim.sim = s; D.goPhase1(); D.goDesc(); D.setRotation(); D.goArch(); D.goCross(); D.alignAt(); s.act.setCarm(-30,-30); D.press(); D.deployTo(0.5); return s; })();
-  ok(Math.abs(sq.dev.retractMm - 26) < 0.3 && Math.abs(sq.dev.turns - 2.5) < 0.05, `wheel state in mm / turns: ${f2(sq.dev.retractMm)} mm = ${f2(sq.dev.turns)} turns at 50%`);
+  ok(Math.abs(sq.dev.retractMm - C.capsuleTravelMm * 0.5) < 0.3 && Math.abs(sq.dev.turns - C.wheelTurnsFull * 0.5) < 0.05, `wheel state in mm / turns: ${f2(sq.dev.retractMm)} mm = ${f2(sq.dev.turns)} turns at 50%`);
   sq.act.wheelMm(2); D.up(1); ok(sq.dev.retractMm > 27.9, 'act.wheelMm moves the capsule by mm'); sq.act.wheelTurns(-0.5); D.up(1); ok(sq.dev.retractMm < 25.0, 'act.wheelTurns(-0.5) retracts the wheel back half a turn'); }
+
+console.log('== v16: published geometry, IFU rules ==');
+{ const PUB = P.PUBLISHED, G = P.GEOMETRY;
+  ok(PUB.stentHeightMm === 48 && PUB.commissureHeightMm === 24 && PUB.halfCellHeightMm === 8 && PUB.cuffHeightMm === 10 && PUB.aorticStentDiaMm === 44 && PUB.capsuleOdMm === 6.3 && PUB.markerHeightMm === 3 && PUB.maxResheaths === 2 && PUB.targetDepthMm === 3, 'published 27 mm Navitor Vision / FlexNav LG values are carried verbatim');
+  ok(Math.abs(G.strutLen - Math.hypot(Math.PI * 13.5 / 9, 8)) < 1e-9, `strut length ${f2(G.strutLen)} mm from 9 cells on a 27 mm circumference with 8 mm half cells`);
+  ok(G.stretchLower > 1.1 && G.stretchLower < 1.2 && Math.abs(G.lowerCrimp - 24 * G.stretchLower) < 1e-9, `inflow lattice stretches x${G.stretchLower.toFixed(3)} when crimped to the capsule bore`);
+  ok(Math.abs(C.capsuleTravelMm - (G.crimpLen + G.tabMm)) < 0.11 && C.capsuleTravelMm > 52 && C.capsuleTravelMm < 58, `capsule travel ${C.capsuleTravelMm} mm = crimped stent + tabs`);
+  ok(Math.abs(P.freeRadius(10) - 13.5) < 1e-9 && Math.abs(P.freeRadius(24) - 13.5) < 1e-9 && Math.abs(P.freeRadius(48) - 22) < 1e-9 && P.freeRadius(36) > 13.5 && P.freeRadius(36) < 22, 'free radius: 27 mm straight to the commissures, crown flares to 44 mm');
+  ok(P.rampAt(2) === C.releaseRampMm && P.rampAt(G.crimpLen) < 2.5, 'inflow cells open over one crimped half cell; the crown springs open over a short travel');
+  ok(P.meanExpansion(C.capsuleTravelMm) > 0.999, 'fully retracted capsule = fully open frame (tabs free)');
+  const cof23 = P.chronicOutwardForce(23), cof25 = P.chronicOutwardForce(25); ok(cof23 > cof25 && cof25 > 0.8 * cof23, `chronic outward force falls gently across the use range (${f2(cof23)} N at 23 mm -> ${f2(cof25)} N at 25 mm)`);
+  const base = { stab: 1, lat: 0, tiltBase: 0.5, wtens: 0.3, press: 0.5 };
+  ok(P.tiltTarget({ ...base, wtens: 0.0 }) > P.tiltTarget(base) + 0.5, 'deck: a gentle push on the LV wire tilts the valve to the outer curve (left-cusp side rises)');
+  ok(P.tiltTarget({ ...base, press: 0.9 }) > P.tiltTarget(base) && P.tiltTarget({ ...base, press: 0.1 }) < P.tiltTarget(base), 'deck: forward push on the system raises the left-cusp side, pulling it back lowers it');
+  const v = P.depthVerdict; ok(v(3.2).key === 'good' && v(2.5).key === 'highish' && v(1.5).key === 'high' && v(5).key === 'deep' && v(7).key === 'vdeep', 'depth verdicts against the 3 mm IFU target');
+  // IFU re-sheath limit through the sim
+  const F = buildFrame(), Pa = buildPaths(F); const s = new Sim(F, Pa); s.started = true; __sim.sim = s; D.goPhase1(); D.goDesc(); D.setRotation(); D.goArch(); D.goCross(); D.alignAt(); s.act.setCarm(-30, -30); D.press();
+  for (let i = 0; i < 3; i++) { D.deployTo(0.5); D.resheathTo(0.1); }
+  ok(s.flags.recapAttempts === 3 && s.flags.resheathOverLimit === 1 && /IFU/.test(s.ev.filter(e => e.type === 'resheath').length ? 'IFU' : ''), `third re-sheath is recorded as over the IFU limit (attempts ${s.flags.recapAttempts}, over limit ${s.flags.resheathOverLimit})`);
+  D.deployTo(0.8); D.secondView(); D.release('fast'); const sc = (await import('../src/scoring.js')).computeScore(s, true); const r = sc.rows.find(q => q.id === 'stop80');
+  ok(r && !r.pass && /IFU limit 2/.test(r.result), 'proctor sheet: the 80% stop row fails with "Re-sheathed 3 times (IFU limit 2)": ' + (r && r.result)); }
 console.log(`\nphysics: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

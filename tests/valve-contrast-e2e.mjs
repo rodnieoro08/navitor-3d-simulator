@@ -20,7 +20,7 @@ ok(await btn.isVisible() && await btn.isDisabled(), 'Inject contrast button is v
 ok((await btn.boundingBox()).height >= (mobile ? 44 : 34), 'Inject contrast button is large enough (' + Math.round((await btn.boundingBox()).height) + ' px)');
 await page.evaluate(() => { __drv.goPhase1(); __drv.goDesc(); __drv.setRotation(); __drv.goArch(); });
 await page.waitForTimeout(500); ok((await st()).phase === 4, 'phase 4 (pigtail in NCC)');
-ok(await btn.isEnabled(), 'Inject enabled from phase 4');
+await page.waitForFunction(() => !document.querySelector('#bInject').disabled, null, { timeout: 5000 }).catch(() => {}); ok(await btn.isEnabled(), 'Inject enabled from phase 4');
 await page.evaluate(() => { __drv.goCross(); __drv.alignAt(); __sim.setAngles(-30, -30); __drv.press(); }); await page.waitForTimeout(800);
 const score0 = await page.evaluate(() => JSON.stringify(__sim.sim.flags.injections || 0));
 // click it for real
@@ -66,8 +66,8 @@ await page.evaluate(() => { __drv.goPhase1(); __drv.goDesc(); __drv.setRotation(
 await page.evaluate(() => { __sim.sim.act.setCarm(-30, -30); });
 await page.waitForTimeout(1500);
 const nStruts = async () => page.evaluate(() => { const d = __sim.views.dev; return { count: d.struts.count, vis: d.struts.visible, nC: d.nC, rows: d.nRows }; });
-let q = await nStruts(); ok(q.nC === 12 && q.rows === 4, `frame: ${q.nC} dense inflow cells + 6 large elongated outflow cells in ${q.rows} rows (not a uniform mesh)`);
-await page.evaluate(() => __drv.deployTo(0.5)); await page.waitForTimeout(800); q = await nStruts(); ok(q.count > 0 && q.count <= 276, 'partial deployment: frame struts rendered (' + q.count + ' segments)');
+let q = await nStruts(); ok(q.nC === 9 && q.rows === 4, `frame: ${q.nC}-cell inflow lattice (IFU: look for all 9 struts) + large crown cells, ${q.rows} node rows`);
+await page.evaluate(() => __drv.deployTo(0.5)); await page.waitForTimeout(800); q = await nStruts(); ok(q.count > 0 && q.count <= 240, 'partial deployment: frame struts rendered (' + q.count + ' segments)');
 const rad = async () => page.evaluate(() => { const d = __sim.views.dev, f = __sim.sim.dev.f, ld = f * 40 + 9 * Math.max(0, Math.min(1, (f - 0.85) / 0.15)); return [d.rAt(2, ld), d.rAt(38, ld)]; });
 let r = await rad(); ok(r[0] > r[1] - 0.001 && r[0] > 11, `inflow opens first at 50% (inflow r ${r[0].toFixed(1)} mm vs outflow still crimped r ${r[1].toFixed(1)} mm)`);
 await monShot('valve-50-fluoro'); await tdShot('valve-50-3d');
@@ -75,7 +75,7 @@ await page.evaluate(() => { __sim.sim.act.setCarm(32, 30); __drv.up(40); __drv.d
 await page.waitForTimeout(1500);
 s = await st(); ok(s.dev.released && s.phase === 8, 'valve released');
 r = await rad(); ok(r[1] > r[0] + 2, `released frame is flared at the outflow (inflow r ${r[0].toFixed(1)} -> outflow r ${r[1].toFixed(1)} mm)`);
-q = await nStruts(); ok(q.count === 276, 'full frame = 276 strut pieces (dense inflow diamonds, 6 large outflow cells, 3 arched peaks, 3 marker stems)');
+q = await nStruts(); ok(q.count === 234, 'full frame = 234 strut segments (9-cell inflow lattice x3 rows, 6 CAF-to-tab crown struts, 6 inner-arch struts)');
 ok(await page.evaluate(() => { const d = __sim.views.dev; return d.vision.length === 3 && d.posts.length === 3 && d.cuff && d.leaf.length === 3; }), 'three Vision markers, three posts, NaviSeal cuff and 3 leaflets present');
 // close-up, no contrast, to judge the frame itself
 await view('mon'); for (let i = 0; i < 4; i++) await page.locator('#zIn').click(); await page.waitForTimeout(2500);

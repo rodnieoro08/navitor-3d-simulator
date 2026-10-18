@@ -223,7 +223,9 @@ export class Sim {
       if (d.f > 0.8 + 1e-6) { this.say('Past the point of no return (gray zone) - the valve cannot be recaptured.', 4); return false; }
       if (d.released) return false;
       // resheath
-      if (d.f > 0.02 && !v.resheathing) { v.resheathing = true; v.recapFrom = d.f; v.deepAtResheath = this.depthNow() > 4.6; v.minF = d.f; this.flags.recapAttempts = (this.flags.recapAttempts || 0) + 1; }
+      if (d.f > 0.02 && !v.resheathing) { v.resheathing = true; v.recapFrom = d.f; v.deepAtResheath = this.depthNow() > 4.6; v.minF = d.f; this.flags.recapAttempts = (this.flags.recapAttempts || 0) + 1; this.log('resheath', { n: this.flags.recapAttempts, f: +d.f.toFixed(2) });
+        if (this.flags.recapAttempts > PH.CONSTANTS.maxResheaths) { this.flags.resheathOverLimit = (this.flags.resheathOverLimit || 0) + 1; this.say(`Re-sheath number ${this.flags.recapAttempts}: the IFU allows at most ${PH.CONSTANTS.maxResheaths} re-sheaths before final release. Fully re-sheath, remove the system and use a new valve.`, 8); }
+        else if (this.flags.recapAttempts === PH.CONSTANTS.maxResheaths) this.say(`Re-sheath ${this.flags.recapAttempts} of ${PH.CONSTANTS.maxResheaths} allowed by the IFU - this is the last one. Go slow and keep the capsule coaxial with the valve.`, 6); }
       d.f = Math.max(0, d.f + df); v.minF = Math.min(v.minF, d.f);
       if (d.locked) { d.locked = false; d.lockArmed = true; this.setCoach(); }
       if (d.f < 0.74) d.lockArmed = true; // hysteresis: a small backwards wobble after Unlock must not re-engage the lock

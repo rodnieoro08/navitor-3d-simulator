@@ -5,7 +5,7 @@ const prof = process.argv[2] || 'desktop'; const mobile = prof === 'phone';
 let pass = 0, bad = 0; const fails = [];
 const ok = (c, m) => { if (c) pass++; else { bad++; fails.push(m); } console.log((c ? '  ok   ' : '  FAIL ') + m); };
 const { browser, page, logs } = await launch(mobile ? 390 : 1280, mobile ? 844 : 800, mobile);
-await page.goto('file:///workspace/navitor-3d-simulator/index.html'); await page.addScriptTag({ path: 'tests/drv.js' });
+await page.goto('file://'+process.cwd()+'/index.html'); await page.addScriptTag({ path: 'tests/drv.js' });
 await page.check('#ack'); await page.click('#startBtn'); await page.waitForTimeout(700);
 const tab = async (t) => { if (mobile) { await page.locator(`#ctabs button[data-t=${t}]`).click(); await page.waitForTimeout(200); } };
 
